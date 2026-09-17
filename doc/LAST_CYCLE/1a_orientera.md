@@ -1,27 +1,27 @@
-# Steg 1a: Orientera
+# Steg 1a: Orientera (Cykel 3)
 
 ## 1. Problembeskrivning & Målbild
-Implementera ett kompromisslöst textlöst AAC-gränssnitt (Maggan) för en afasideltagare:
-- Dynamisk skärmpartitionering per identifierad talare (1–4 zoner) med vilsamt tomt utgångsläge.
-- Strikt förankring och konfidensmodell: Inga hallucinationer. Konfidens < 0.5 lämnas tomt, 0.5–0.8 visar transparent frågetecken (`?`), > 0.8 visar ren bild.
-- Scen-brickor i deltagarens egen zon för interaktiv dialogträning med låtsasdeltagare utan menyer.
-- Tydligt feedbackreglage (grön bock / rött kryss) för successiv inlärning.
+Implementera domänen `src/features/live_listener/`:
+- **Muntligt samtyckesflöde**: Innan mikrofonen börjar processa samtal i rummet ställer Gemini en tydlig muntlig fråga till deltagarna så att alla ger samtycke.
+- **Röstströmning & Talardetektering**: Fångar upp talat ljud, särskiljer talare (Talare 1 vs Talare 2) och genererar strukturerade talhändelser.
+- **Direktkoppling till Samtalszoner**: Levererar tolkade bildämnen direkt till `AacDisplay` med strikta konfidensvärden.
 
 ## 2. Inblandade domäner
-- `src/features/aac_display/` (Primär domän)
-- `src/shared/types/` (Gemensamma datakontrakt)
+- `src/features/live_listener/` (Primär domän)
+- `src/features/aac_display/` (Konsumerande domän)
+- `src/features/adaptive_memory/` (Minnesintegrering)
 
 ## 3. Tre fokuserade GROW-frågor mot risknoder
-1. **Goal & State (Tillståndsrisk)**: Hur hanterar `aac_display` övergången mellan passivt viloläge, aktivt lyssnande och scenbaserade låtsassamtal så att zoner och bildbrickor hålls stabila utan plötsliga skiftningar?
-2. **Options & Contract (Kontraktsrisk)**: Hur utformas datakontrakten för `AacItem`, `SpeakerZone`, `ConfidenceThreshold` och `FeedbackAction` så att gränsen mellan verifierad fakta och osäker gissning (frågetecken-överlägg) upprätthålls deterministiskt?
-3. **Way Forward & Resilience (Resiliensrisk)**: Hur säkrar vi att låg konfidens (< 0.5) eller nätverkslatens konsekvent resulterar i vilsam tom yta snarare än felaktiga illustrationer eller textstörningar?
+1. **Goal & State (Tillstånd)**: Hur modelleras tillståndsmaskinen för lyssnaren (`IDLE` -> `AWAITING_CONSENT` -> `STREAMING` -> `ANALYZING`) för att säkerställa att ingen ljuddata buffras innan samtycke bekräftats?
+2. **Options & Contract (Kontrakt)**: Hur definieras `LiveListenerContract` och `LiveUtteranceEvent` för att garantera att varje tolkad symbol har en väldefinierad talartillhörighet och konfidenspoäng?
+3. **Way Forward & Resilience (Resiliens)**: Hur hanteras nekad mikrofonbehörighet eller tysta miljöer utan att gränssnittet låser sig eller visar felmeddelanden i text?
 
 ```json
 {
   "status": "IN_PROGRESS",
-  "current_domain": "aac_display",
+  "current_domain": "live_listener",
   "next_step": "1b_kartlagga",
-  "ticket_id": "TCK-002",
-  "active_skill": "gemini-api-dev"
+  "ticket_id": "TCK-004",
+  "active_skill": "gemini-live-api-dev"
 }
 ```

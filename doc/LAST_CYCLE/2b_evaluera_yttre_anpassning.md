@@ -1,7 +1,6 @@
-# Steg 2b: Utvärdera yttre anpassning
+# Steg 2b: Utvärdera yttre anpassning (Cykel 3)
 
-## 1. Ergonomi & Tillgänglighet för Afasianvändare
-- **Kognitiv belastning**: Noll text minimerar mental stress och språklig blockering.
-- **Tydlighet vid osäkerhet**: Frågetecknet ger användaren omedelbar förståelse för att AI:n tvekar, vilket inbjuder till enkel bekräftelse eller avfärdande utan frustration.
-- **Pekergonomi**: Inga komplexa svepgester eller dubbelklick – enbart direkta tryck på stora ytor.
-- **Responsivitet**: Optimerad för surfplatta (landscape och portrait) och desktop preview.
+## 1. Ergonomi & Tillgänglighet
+- **Muntligt samtycke minskar oro**: Alla i rummet hör varför mikrofonen lyssnar, vilket skapar trygghet och social acceptans.
+- **Tydlig visuell återkoppling**: Den mjuka markeringen runt den talande personens zon hjälper afasideltagaren att koppla ljud till rätt skärmyta utan att behöva läsa.
+- **Inga avbrott**: Systemet lyssnar i bakgrunden utan att kräva att deltagaren gör någonting alls förrän de själva vill peka på en bild.

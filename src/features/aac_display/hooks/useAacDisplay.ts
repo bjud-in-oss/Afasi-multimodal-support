@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { AacTile, PracticeScenario, FeedbackRecord, AacDisplayState } from "../domain/types";
+import { defaultAdaptiveMemory } from "../../adaptive_memory";
 
 const SCENARIOS: Record<string, PracticeScenario> = {
   coffee: {
@@ -177,10 +178,10 @@ export function useAacDisplay() {
 
     const scenario = SCENARIOS[scenarioKey];
     if (scenario) {
-      // Filtrera strikt bort alla brickor med konfidens under 0.50 för att helt undvika hallucinationer
+      // Filtrera och justera brickor med inlärda vikter från adaptive memory
       const verifiedZones = scenario.partnerZones.map((zone) => ({
         ...zone,
-        tiles: zone.tiles.filter((t) => t.confidence >= 0.5),
+        tiles: defaultAdaptiveMemory.applyLearnedWeights(scenarioKey, zone.tiles),
       }));
 
       setState((prev) => ({
@@ -212,6 +213,15 @@ export function useAacDisplay() {
       timestamp: Date.now(),
     };
 
+    // Spara i den adaptiva minnesmotorn
+    defaultAdaptiveMemory.recordFeedback({
+      contextKey: state.activeScenarioId || "general",
+      tileId: selectedTile.id,
+      iconKey: selectedTile.iconKey,
+      action: "confirm",
+      initialConfidence: selectedTile.confidence,
+    });
+
     setFeedbackStatus("confirmed");
 
     // Höj konfidensen för den valda brickan så att frågetecknet tonas bort
@@ -227,7 +237,7 @@ export function useAacDisplay() {
     }));
 
     speakText("Ja, precis så.");
-  }, [selectedTile, speakText]);
+  }, [selectedTile, speakText, state.activeScenarioId]);
 
   // Avfärda gissning (Rött kryss)
   const handleReject = useCallback(() => {
@@ -238,6 +248,15 @@ export function useAacDisplay() {
       action: "reject",
       timestamp: Date.now(),
     };
+
+    // Spara avfärdande i den adaptiva minnesmotorn så att den dämpas permanent
+    defaultAdaptiveMemory.recordFeedback({
+      contextKey: state.activeScenarioId || "general",
+      tileId: selectedTile.id,
+      iconKey: selectedTile.iconKey,
+      action: "reject",
+      initialConfidence: selectedTile.confidence,
+    });
 
     setFeedbackStatus("rejected");
 
@@ -253,7 +272,7 @@ export function useAacDisplay() {
 
     setSelectedTile(null);
     speakText("Nej, inte det.");
-  }, [selectedTile, speakText]);
+  }, [selectedTile, speakText, state.activeScenarioId]);
 
   // Växla mikrofon och muntligt samtycke
   const toggleListening = useCallback(() => {

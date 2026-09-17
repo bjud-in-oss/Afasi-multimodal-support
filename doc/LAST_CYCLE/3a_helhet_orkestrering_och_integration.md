@@ -1,13 +1,13 @@
-# Steg 3a: Helhet, orkestrering och integration
+# Steg 3a: Helhet, orkestrering och integration (Cykel 3)
 
 ## 1. Systemöversikt & Dataflöde
-1. **Inmatningsfas**: Tal och scener genererar händelser till `useAacDisplay`.
-2. **Filtreringsfas**: Varje förslag passerar konfidenskontrollen:
-   - `< 0.50` -> Kastas (zon förblir tom).
-   - `0.50 - 0.79` -> `showQuestionMark = true`.
-   - `>= 0.80` -> Visas direkt.
-3. **Visningsfas**: `AacDisplay` renderar zonerna i en horisontell/vertikal flex-grid.
-4. **Interaktionsfas**:
-   - Tryck på bildbricka -> triggar röstprediktion och talsyntes.
-   - Tryck på scen-bricka -> aktiverar motsvarande låtsassamtal med virtuella samtalspartners.
-   - Tryck på bock/kryss -> uppdaterar den lokala anpassningshistoriken.
+1. **Initiering**: Användaren trycker på mikrofonknappen.
+2. **Samtycke**: `LiveListenerService` begär samtycke muntligt via `speakConsentRequest()`.
+3. **Ljudanalys**:
+   - Ljudström fångas upp eller simuleras kontrollerat.
+   - VAD upptäcker när någon talar.
+   - Talaren klassificeras som `"speaker-1"` eller `"speaker-2"`.
+4. **Symbolöversättning & Minne**:
+   - Talade koncept matchas mot symboler med grundkonfidens.
+   - `AdaptiveMemoryService.applyLearnedWeights` justerar konfidensen baserat på användarens tidigare val.
+5. **Skärmuppdatering**: `AacDisplay` tar emot händelsen och renderar zonen med eventuellt frågetecken.

@@ -2,4 +2,4 @@
 
 | Ticket ID | Typ | Domän | Status | Beskrivning |
 | :--- | :--- | :--- | :--- | :--- |
-| TCK-003 | Feature | adaptive_memory | Open | Successiv inlärningsmotor med persistering av bekräftade och avfärdade mönster |
+| TCK-004 | Feature | live_listener | In Progress | Röstaktivering och talardetektering med Gemini Live API och muntligt samtycke |

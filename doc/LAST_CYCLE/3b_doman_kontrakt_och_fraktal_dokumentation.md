@@ -1,14 +1,11 @@
-# Steg 3b: Domänkontrakt och fraktal dokumentation
+# Steg 3b: Domänkontrakt och fraktal dokumentation (Cykel 3)
 
-## 1. Domänens gränssnitt (`src/features/aac_display/`)
-- `components/AacDisplay.tsx`: Huvudkomponent för skärmuppdelning och zonrendering.
-- `components/SpeakerZoneTile.tsx`: Enskild talarzon med bildbrickor och frågetecken.
-- `components/UserControlZone.tsx`: Afasideltagarens zon med scen-brickor och feedbackreglage.
-- `domain/types.ts`: Typdefinitioner för `AacTile`, `SpeakerZone`, `PracticeScenario`, `FeedbackState`.
-- `hooks/useAacDisplay.ts`: Hook för zonhantering, konfidensfiltrering och scenväxling.
-- `index.ts`: Publik export av domänen.
+## 1. Domänens gränssnitt (`src/features/live_listener/`)
+- `domain/types.ts`: Typdefinitioner för `ListenerStatus`, `LiveUtterance`, `SpeakerIdentification`.
+- `domain/liveListenerService.ts`: Core service för samtycke, mikrofon och talarströmning.
+- `hooks/useLiveListener.ts`: React-hook för gränssnittsintegration.
+- `index.ts`: Publik export.
 
 ## 2. Samlokaliserad domändokumentation
-- `src/features/aac_display/doc/BUSINESS_RULES.md`
-- `src/features/aac_display/doc/INDEX.md`
-- `src/features/aac_display/doc/UI_WORKFLOWS.md`
+- `src/features/live_listener/doc/BUSINESS_RULES.md`
+- `src/features/live_listener/doc/INDEX.md`
