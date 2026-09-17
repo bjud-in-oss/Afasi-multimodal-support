@@ -2,5 +2,4 @@
 
 | Ticket ID | Typ | Domän | Status | Beskrivning |
 | :--- | :--- | :--- | :--- | :--- |
-| `TCK-001` | Task | example_feature | Closed | Initiering av mallrepo och arkitekturregler |
-| `TCK-002` | Task | example_feature | Open | Implementera första domänfunktionaliteten |
+| TCK-003 | Feature | adaptive_memory | Open | Successiv inlärningsmotor med persistering av bekräftade och avfärdade mönster |

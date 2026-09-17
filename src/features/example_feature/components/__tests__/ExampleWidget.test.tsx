@@ -1,8 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { ExampleWidget } from "../ExampleWidget";
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("ExampleWidget", () => {
   it("renderar widgeten med initialt värde 0", () => {
