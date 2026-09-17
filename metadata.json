@@ -1,0 +1,6 @@
+{
+  "name": "Outreach Template Gemini Cloner",
+  "description": "Systemarkitektur och mall för autonom utveckling med Google Gemini Skills och mekaniska kvalitetsspärrar.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
