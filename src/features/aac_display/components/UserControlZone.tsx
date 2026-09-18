@@ -13,6 +13,7 @@ interface UserControlZoneProps {
   activeScenarioId: string | null;
   hasSelectedTile: boolean;
   isListening: boolean;
+  connectionStatus?: "disconnected" | "connecting" | "active";
   feedbackStatus: "confirmed" | "rejected" | null;
   onSelectScenario: (key: "coffee" | "cart" | "heart" | "home") => void;
   onConfirm: () => void;
@@ -24,6 +25,7 @@ export function UserControlZone({
   activeScenarioId,
   hasSelectedTile,
   isListening,
+  connectionStatus = "disconnected",
   feedbackStatus,
   onSelectScenario,
   onConfirm,
@@ -148,7 +150,7 @@ export function UserControlZone({
           data-testid="btn-toggle-mic"
           onClick={onToggleListening}
           aria-label="Mikrofon"
-          className={`w-full py-4 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+          className={`w-full py-4 rounded-2xl border flex items-center justify-center transition-all cursor-pointer relative ${
             isListening
               ? "bg-stone-900 text-emerald-400 border-stone-900 shadow-md ring-2 ring-emerald-500/20"
               : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
@@ -159,6 +161,28 @@ export function UserControlZone({
           ) : (
             <MicOff className="w-7 h-7 stroke-[2]" />
           )}
+
+          {/* Visuell statussymbol för Gemini Live-anslutning:
+              - Röd/Grå punkt: Frånkopplad / Inget API-svar
+              - Gul punkt: Ansluter till Gemini Live...
+              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar efter samtal/väckningsord ("Maggan") */}
+          <span
+            data-testid="live-status-dot"
+            aria-label={
+              connectionStatus === "active"
+                ? "Live-anslutning aktiv och lyssnar"
+                : connectionStatus === "connecting"
+                ? "Ansluter till Gemini Live"
+                : "Frånkopplad"
+            }
+            className={`absolute top-3.5 right-3.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-all duration-300 ${
+              connectionStatus === "active"
+                ? "bg-emerald-500 animate-pulse ring-2 ring-emerald-400/50"
+                : connectionStatus === "connecting"
+                ? "bg-amber-400 animate-ping ring-2 ring-amber-300/50"
+                : "bg-stone-400"
+            }`}
+          />
         </button>
       </div>
     </aside>

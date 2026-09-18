@@ -1,7 +1,15 @@
 import { useState, useCallback, useEffect } from "react";
-import { AacTile, PracticeScenario, FeedbackRecord, AacDisplayState } from "../domain/types";
+import {
+  AacTile,
+  PracticeScenario,
+  FeedbackRecord,
+  AacDisplayState,
+  ColorTheme,
+  SpeakerZone,
+} from "../domain/types";
 import { defaultAdaptiveMemory } from "../../adaptive_memory";
 import { defaultLiveListener } from "../../live_listener";
+import { ListenerStatus } from "../../live_listener/domain/types";
 import { defaultSymbolEngine } from "../../symbol_engine";
 
 const SCENARIOS: Record<string, PracticeScenario> = {
@@ -161,10 +169,7 @@ const SCENARIOS: Record<string, PracticeScenario> = {
 export function useAacDisplay() {
   const [state, setState] = useState<AacDisplayState>({
     mode: "IDLE",
-    speakerZones: [
-      { id: "speaker-1", colorTheme: "emerald", tiles: [], isActive: false },
-      { id: "speaker-2", colorTheme: "amber", tiles: [], isActive: false },
-    ],
+    speakerZones: [],
     activeScenarioId: null,
     lastSpokenText: null,
     feedbackRecords: [],
@@ -172,8 +177,23 @@ export function useAacDisplay() {
     consentGranted: false,
   });
 
+  const [listenerStatus, setListenerStatus] = useState<ListenerStatus>(
+    defaultLiveListener.getStatus()
+  );
   const [selectedTile, setSelectedTile] = useState<AacTile | null>(null);
   const [feedbackStatus, setFeedbackStatus] = useState<"confirmed" | "rejected" | null>(null);
+
+  // Visuell statusindikator för Gemini Live-anslutning:
+  // - "disconnected": Röd/grå punkt (frånkopplad / inget svar)
+  // - "connecting": Gul punkt (ansluter till Gemini Live...)
+  // - "active": Grön pulserande punkt (aktiv och lyssnar efter samtal / "Maggan")
+  const connectionStatus: "disconnected" | "connecting" | "active" = (() => {
+    if (!state.isListening || listenerStatus === "idle") return "disconnected";
+    if (listenerStatus === "connecting" || listenerStatus === "awaiting_consent")
+      return "connecting";
+    if (listenerStatus === "listening") return "active";
+    return "disconnected";
+  })();
 
   // Talsyntesfunktion
   const speakText = useCallback((text: string) => {
@@ -198,10 +218,7 @@ export function useAacDisplay() {
         ...prev,
         mode: "IDLE",
         activeScenarioId: null,
-        speakerZones: [
-          { id: "speaker-1", colorTheme: "emerald", tiles: [], isActive: false },
-          { id: "speaker-2", colorTheme: "amber", tiles: [], isActive: false },
-        ],
+        speakerZones: [],
       }));
       setSelectedTile(null);
       setFeedbackStatus(null);
@@ -310,6 +327,73 @@ export function useAacDisplay() {
   useEffect(() => {
     const originalSynthesizer = (text: string) => speakText(text);
     defaultLiveListener.setSpeechSynthesizer(originalSynthesizer);
+
+    defaultLiveListener.setOnStatusChange((status) => {
+      setListenerStatus(status);
+    });
+
+    const COLOR_PALETTE: ColorTheme[] = [
+      "emerald",
+      "amber",
+      "violet",
+      "rose",
+      "sky",
+      "stone",
+    ];
+
+    defaultLiveListener.setOnUtterance((event) => {
+      setState((prev) => {
+        const existingIdx = prev.speakerZones.findIndex((z) => z.id === event.speakerId);
+
+        let updatedZones: SpeakerZone[];
+
+        if (existingIdx === -1) {
+          // Skapa ny dynamisk zon till vänster endast när en talare faktiskt detekteras
+          const colorTheme = COLOR_PALETTE[prev.speakerZones.length % COLOR_PALETTE.length];
+          const newZone: SpeakerZone = {
+            id: event.speakerId,
+            colorTheme,
+            tiles: event.tiles.slice(0, 4),
+            isActive: true,
+          };
+          updatedZones = [
+            ...prev.speakerZones.map((z) => ({ ...z, isActive: false })),
+            newZone,
+          ];
+        } else {
+          // Uppdatera befintlig talare med nya symboler och markera som aktiv
+          updatedZones = prev.speakerZones.map((z, idx) => {
+            if (idx === existingIdx) {
+              const existingKeys = new Set(z.tiles.map((t) => t.iconKey));
+              const freshTiles = event.tiles.filter((t) => !existingKeys.has(t.iconKey));
+              return {
+                ...z,
+                tiles: [...z.tiles, ...freshTiles].slice(0, 4),
+                isActive: true,
+              };
+            }
+            return { ...z, isActive: false };
+          });
+        }
+
+        return {
+          ...prev,
+          mode: "LIVE",
+          speakerZones: updatedZones,
+        };
+      });
+    });
+
+    defaultLiveListener.setOnActiveSpeakerChange((speakerId) => {
+      if (speakerId === null) return;
+      setState((prev) => ({
+        ...prev,
+        speakerZones: prev.speakerZones.map((zone) => ({
+          ...zone,
+          isActive: zone.id === speakerId,
+        })),
+      }));
+    });
   }, [speakText]);
 
   // Frikopplad mikro-feedback: Tyst avfärdande med automatisk ersättning i realtid
@@ -370,10 +454,15 @@ export function useAacDisplay() {
     setState((prev) => {
       const nextListening = !prev.isListening;
       if (nextListening) {
+        setListenerStatus("connecting");
         defaultLiveListener.startListening();
         defaultLiveListener.confirmConsent();
+        setTimeout(() => {
+          setListenerStatus("listening");
+        }, 350);
       } else {
         defaultLiveListener.stopListening();
+        setListenerStatus("idle");
       }
       return {
         ...prev,
@@ -394,5 +483,6 @@ export function useAacDisplay() {
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,
+    connectionStatus,
   };
 }

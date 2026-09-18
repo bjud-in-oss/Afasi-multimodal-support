@@ -2,6 +2,20 @@ import { ListenerStatus, ListenerOptions, SpeakerId, LiveUtteranceEvent, Consent
 import { AacTile } from "../../aac_display/domain/types";
 import { defaultAdaptiveMemory } from "../../adaptive_memory";
 
+const resolveGeminiApiKey = (): string | undefined => {
+  if (typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+  if (
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_GEMINI_API_KEY
+  ) {
+    return import.meta.env.VITE_GEMINI_API_KEY as string;
+  }
+  return undefined;
+};
+
 const DEFAULT_CONSENT_MSG =
   "Hej! För att stödja Kalle i samtalet lyssnar jag och skapar bilder av vad vi pratar om. Är det okej för alla i rummet?";
 
@@ -40,6 +54,7 @@ export class LiveListenerService {
   private consent: ConsentState = { requested: false, granted: false };
   private options: ListenerOptions;
   private speechSynthesizer: (text: string) => void;
+  private apiKey: string | undefined = resolveGeminiApiKey();
 
   constructor(options: ListenerOptions = {}) {
     this.options = options;
@@ -58,12 +73,39 @@ export class LiveListenerService {
     this.speechSynthesizer = fn;
   }
 
+  public setOnUtterance(cb: ((event: LiveUtteranceEvent) => void) | undefined): void {
+    this.options.onUtterance = cb;
+  }
+
+  public setOnActiveSpeakerChange(
+    cb: ((speakerId: SpeakerId | null) => void) | undefined
+  ): void {
+    this.options.onActiveSpeakerChange = cb;
+  }
+
+  public setOnStatusChange(cb: ((status: ListenerStatus) => void) | undefined): void {
+    this.options.onStatusChange = cb;
+  }
+
+  public getApiKey(): string | undefined {
+    return this.apiKey;
+  }
+
+  public setApiKey(key: string): void {
+    this.apiKey = key;
+  }
+
   public getStatus(): ListenerStatus {
     return this.status;
   }
 
   public isConsentGranted(): boolean {
     return this.consent.granted;
+  }
+
+  public setStatus(status: ListenerStatus): void {
+    this.status = status;
+    this.notifyStatus();
   }
 
   public startListening(): void {

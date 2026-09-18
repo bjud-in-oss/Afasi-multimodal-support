@@ -78,4 +78,18 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
     expect(service.isConsentGranted()).toBe(false);
     expect(service.getStatus()).toBe("idle");
   });
+
+  it("stöder klientbaserad API-nyckel (VITE_GEMINI_API_KEY) och get/setApiKey", () => {
+    service.setApiKey("test-vite-api-key");
+    expect(service.getApiKey()).toBe("test-vite-api-key");
+  });
+
+  it("tillåter dynamisk registrering av lyssnar-callbacks och statusändring", () => {
+    const statusLogs: ListenerStatus[] = [];
+    service.setOnStatusChange((st) => statusLogs.push(st));
+
+    service.setStatus("connecting");
+    expect(service.getStatus()).toBe("connecting");
+    expect(statusLogs).toContain("connecting");
+  });
 });

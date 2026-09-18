@@ -132,11 +132,14 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     it("anpassar grid-layouten adaptivt för 1, 2 och 3 talarzoner", () => {
       render(<AacDisplay />);
       
-      // I startläget finns 2 talare i default-state
       const zonesContainer = screen.getByTestId("speaker-zones-container");
+
+      // Byt till 2 talare via 'coffee' (Fika med vänner)
+      const coffeeButton = screen.getByTestId("scene-coffee");
+      fireEvent.click(coffeeButton);
       expect(zonesContainer).toHaveClass("md:grid-cols-2");
 
-      // Byt till 1 talare via 'cart'
+      // Byt till 1 talare via 'cart' (Matbutik)
       const cartButton = screen.getByTestId("scene-cart");
       fireEvent.click(cartButton);
       expect(zonesContainer).toHaveClass("grid-cols-1");
@@ -209,6 +212,35 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       expect(speaker1.className).toContain("border-emerald-200/60");
       expect(speaker2.className).toContain("border-violet-200/60");
       expect(speaker3.className).toContain("border-rose-200/60");
+    });
+  });
+
+  describe("Dynamisk live-koppling och zoninitialisering (TCK-007 / Bugfix)", () => {
+    it("börjar vid 0 talare och visar tom samtalsyta till vänster och kontrollzon till höger", () => {
+      render(<AacDisplay />);
+
+      // Kontrollera att samtalszon-containern har 0 talarzoner och visar placeholder
+      expect(screen.getByTestId("empty-speaker-zones-placeholder")).toBeInTheDocument();
+      expect(screen.queryByTestId("speaker-zone-speaker-1")).not.toBeInTheDocument();
+
+      // Kontrollera att afasideltagarens kontrollzon finns till höger
+      expect(screen.getByTestId("aac-user-control-zone")).toBeInTheDocument();
+    });
+
+    it("visar visuell statusindikator (punkt) på mikrofonknappen för Gemini Live-anslutning", () => {
+      render(<AacDisplay />);
+
+      const statusDot = screen.getByTestId("live-status-dot");
+      expect(statusDot).toBeInTheDocument();
+      // Frånkopplad punkt initialt (grå / stone)
+      expect(statusDot.className).toContain("bg-stone-400");
+
+      // Klicka på mikrofonen för att aktivera anslutning
+      const micButton = screen.getByTestId("btn-toggle-mic");
+      fireEvent.click(micButton);
+
+      // När mikrofonen startas övergår den till connecting / active
+      expect(statusDot.className).toMatch(/bg-amber-400|bg-emerald-500/);
     });
   });
 });

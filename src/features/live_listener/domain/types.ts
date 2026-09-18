@@ -1,8 +1,14 @@
 import { AacTile } from "../../aac_display/domain/types";
 
-export type ListenerStatus = "idle" | "awaiting_consent" | "listening" | "paused";
+export type ListenerStatus =
+  | "idle"
+  | "connecting"
+  | "listening"
+  | "paused"
+  | "awaiting_consent"
+  | "error";
 
-export type SpeakerId = "speaker-1" | "speaker-2";
+export type SpeakerId = string;
 
 export interface LiveUtteranceEvent {
   id: string;
