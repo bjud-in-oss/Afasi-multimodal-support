@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AacTile, PracticeScenario, FeedbackRecord, AacDisplayState } from "../domain/types";
 import { defaultAdaptiveMemory } from "../../adaptive_memory";
+import { defaultLiveListener } from "../../live_listener";
 
 const SCENARIOS: Record<string, PracticeScenario> = {
   coffee: {
@@ -274,14 +275,21 @@ export function useAacDisplay() {
     speakText("Nej, inte det.");
   }, [selectedTile, speakText, state.activeScenarioId]);
 
+  // Koppla samman liveListener-händelser
+  useEffect(() => {
+    const originalSynthesizer = (text: string) => speakText(text);
+    defaultLiveListener.setSpeechSynthesizer(originalSynthesizer);
+  }, [speakText]);
+
   // Växla mikrofon och muntligt samtycke
   const toggleListening = useCallback(() => {
     setState((prev) => {
       const nextListening = !prev.isListening;
-      if (nextListening && !prev.consentGranted) {
-        speakText(
-          "Hej! För att stödja Kalle i samtalet lyssnar jag och skapar bilder av vad vi pratar om. Är det okej för alla i rummet?"
-        );
+      if (nextListening) {
+        defaultLiveListener.startListening();
+        defaultLiveListener.confirmConsent();
+      } else {
+        defaultLiveListener.stopListening();
       }
       return {
         ...prev,
@@ -289,7 +297,7 @@ export function useAacDisplay() {
         consentGranted: true,
       };
     });
-  }, [speakText]);
+  }, []);
 
   return {
     state,

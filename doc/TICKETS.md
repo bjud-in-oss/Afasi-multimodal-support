@@ -2,4 +2,4 @@
 
 | Ticket ID | Typ | Domän | Status | Beskrivning |
 | :--- | :--- | :--- | :--- | :--- |
-| TCK-004 | Feature | live_listener | In Progress | Röstaktivering och talardetektering med Gemini Live API och muntligt samtycke |
+| TCK-005 | Feature | symbol_engine | Open | Dynamisk SVG-bildgenerator och visuell representation med Gemini |
