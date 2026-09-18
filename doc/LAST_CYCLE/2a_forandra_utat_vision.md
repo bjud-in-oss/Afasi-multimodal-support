@@ -1,6 +1,11 @@
-# Steg 2a: Förändra utåt (Vision & Gränssnitt - Cykel 3)
+# Steg 2a: Förändra utåt (Vision & Gränssnitt - Cykel 4)
 
 ## 1. Yttre gränssnittsförändring
-- **Levande röstkoppling**: När mikrofonen aktiveras talar Gemini högt till rummet med svensk talsyntes för att begära samtycke.
-- **Talarzon-aktivering**: När en person i rummet talar lyser den tillhörande zonen upp med en subtil, mjuk ram (`ring-2`) som visar vem som talar utan att använda namn eller text.
-- **Direktinflytande**: De tolkade bildbrickorna uppenbarar sig direkt i talarens zon, redo för afasideltagaren att peka på, bekräfta eller avfärda.
+- **Direkta mikro-kontroller på varje ruta**:
+  Varje samtalsbricka i samtliga zoner (både deltagarens och samtalspartnernas) får subtila mikro-åtgärder.
+  - Ett litet tyst kryss i övre vänstra hörnet gör att deltagaren direkt kan dissa ett irrelevant eller oönskat förslag.
+  - Ett litet tyst bock-märke ger möjlighet att bekräfta utan att talsyntesen läser upp.
+- **Omedelbar respons & Tysthet**:
+  När deltagaren trycker på mikro-krysset försvinner brickan ögonblickligen i en mjuk övergång. Ingen röst talar i rummet.
+- **Självläkande zoner**:
+  Kort därefter uppenbarar sig ett nytt, förfinat bildförslag på den tomma platsen, hämtat utifrån samtalskontexten och filtrerat genom minnesmotorn.

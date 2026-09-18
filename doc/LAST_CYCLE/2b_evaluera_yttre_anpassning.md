@@ -1,6 +1,9 @@
-# Steg 2b: Utvärdera yttre anpassning (Cykel 3)
+# Steg 2b: Utvärdera yttre anpassning (Cykel 4)
 
-## 1. Ergonomi & Tillgänglighet
-- **Muntligt samtycke minskar oro**: Alla i rummet hör varför mikrofonen lyssnar, vilket skapar trygghet och social acceptans.
-- **Tydlig visuell återkoppling**: Den mjuka markeringen runt den talande personens zon hjälper afasideltagaren att koppla ljud till rätt skärmyta utan att behöva läsa.
-- **Inga avbrott**: Systemet lyssnar i bakgrunden utan att kräva att deltagaren gör någonting alls förrän de själva vill peka på en bild.
+## 1. Ergonomi & Afasianpassning
+- **Integritet och samtalsflyt**:
+  Att kunna dissa förslag utan att talsyntesen bryter in är avgörande. Afasideltagaren slipper generande feluppläsningar inför andra personer i rummet.
+- **Minimal kognitiv ansträngning**:
+  Ett enkelt tryck på krysset rensar bort missuppfattningar direkt på plats.
+- **Lugn och adaptivitet**:
+  Genom att den dissade brickan inte återkommer och ersätts automatiskt med ett bättre förslag upplever deltagaren att systemet lyssnar och lär sig i realtid.

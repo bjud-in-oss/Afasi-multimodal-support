@@ -1,26 +1,27 @@
-# Steg 1b: Kartlägga (Cykel 3)
+# Steg 1b: Kartlägga (Cykel 4)
 
 ## 1. Svar på GROW-frågorna
 
 ### Svar Fråga 1 (Goal & State)
-Tillståndet styrs av `LiveListenerService` med följande faser:
-- `IDLE`: Ingen mikrofon aktiv, ingen buffring.
-- `AWAITING_CONSENT`: Muntlig fråga ställs högt till rummet via `SpeechSynthesis`.
-- `LISTENING`: Mikrofonen är öppen och analyserar röstaktivitet (VAD).
-- `PAUSED`: Tillfälligt pausat lyssnande.
-Data skickas enbart till tolkning när tillståndet är `LISTENING`.
+Tillståndet för en bricka frikopplas:
+- Förslagsrutorna (`AacTileItem`) utrustas med diskreta mikro-åtgärder: ett tyst avfärdande (kryss) och ett tyst godkännande (bock).
+- Vid klick på mikro-avfärdandet filtreras brickan omedelbart bort från zonens `tiles`-array i React-state utan anrop till `speakText`.
+- Den tömda platsen reserveras med en mjuk laddningsplatshållare tills ersättningsbrickan anländer.
 
 ### Svar Fråga 2 (Options & Contract)
-Ett gemensamt kontrakt definieras:
-- `LiveUtterance`: `{ id: string; speakerId: "speaker-1" | "speaker-2"; text: string; tiles: AacTile[]; timestamp: number }`.
-- `SpeakerDiarization`: Kartlägger ljudkällan till rätt visuell kolumn i gränssnittet.
+`SymbolEngineService` definierar ett dedikerat kontrakt:
+- `requestReplacementTile(zoneId: string, rejectedTile: AacTile, contextKey: string): Promise<AacTile | null>`.
+- Metoden anropar `defaultAdaptiveMemory.recordFeedback` med `action: "reject"` så att det dissade begreppets inlärda vikt omedelbart sänks (< 0.50).
+- Därefter söks nästa mest relevanta symbol (från kontextuella symbolkandidater eller Gemini) som har en konfidens $\ge 0.50$.
 
-### Svar Fråga 3 (Way Forward & Resilience)
-Om mikrofonen nekas i webbläsaren eller om `getUserMedia` inte stöds i aktuell iframe växlar servicen automatiskt till en kontrollerad simuleringsmotor för övning utan att krascha eller visa förvirrande felmeddelanden i text.
+### Svar Fråga 3 (Way Forward & Resilience & Hybridkoppling)
+Hybridkopplingen säkras genom att använda funktionella tillståndsuppdateringar (`setState(prev => ...)`) med unika brick-ID:n (`id`).
+- Om bakgrundslyssnaren i rummet lägger till nya ämnen sker detta via append/merge utan att skriva över pågående ersättningar.
+- Om ingen lämplig ersättningssymbol hittas förblir platsen ren och tom för att förhindra hallucinationer och bibehålla en lugn skärmbild.
 
 ## 2. Identifierade beroenden och aktiva vektorer
-- Domän: `src/features/live_listener/`
-- Konsument: `src/features/aac_display/`
+- Domän: `src/features/symbol_engine/`
+- Konsumenter: `src/features/aac_display/`, `src/features/adaptive_memory/`
 
 ```json
 {
