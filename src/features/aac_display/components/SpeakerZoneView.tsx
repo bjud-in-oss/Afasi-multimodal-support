@@ -21,6 +21,8 @@ export function SpeakerZoneView({
     amber: "bg-amber-50/30 border-amber-200/60",
     sky: "bg-sky-50/30 border-sky-200/60",
     stone: "bg-stone-50/40 border-stone-200/60",
+    violet: "bg-violet-50/30 border-violet-200/60",
+    rose: "bg-rose-50/30 border-rose-200/60",
   }[zone.colorTheme];
 
   const activePulse = zone.isActive ? "ring-2 ring-emerald-500/40 shadow-sm" : "";
@@ -28,7 +30,7 @@ export function SpeakerZoneView({
   return (
     <section
       data-testid={`speaker-zone-${zone.id}`}
-      className={`flex-1 p-5 rounded-3xl border flex flex-col transition-all duration-300 ${themeStyles} ${activePulse}`}
+      className={`flex-1 p-5 rounded-3xl border flex flex-col transition-all duration-500 ${themeStyles} ${activePulse}`}
     >
       {/* Rutnät för samtalsbrickor - helt utan rubriktext */}
       <div className="flex-1 grid grid-cols-2 gap-4 place-content-start">

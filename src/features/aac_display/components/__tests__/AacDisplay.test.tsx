@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { AacDisplay } from "../AacDisplay";
+import { SpeakerZoneView } from "../SpeakerZoneView";
 
 afterEach(() => {
   cleanup();
@@ -125,5 +126,89 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
     const tilesAfterReset = screen.queryAllByTestId(/^aac-tile-/);
     expect(tilesAfterReset.length).toBe(0);
+  });
+
+  describe("Flertalar-rum (TCK-006: Adaptiv layout-skalning och färgkodning)", () => {
+    it("anpassar grid-layouten adaptivt för 1, 2 och 3 talarzoner", () => {
+      render(<AacDisplay />);
+      
+      // I startläget finns 2 talare i default-state
+      const zonesContainer = screen.getByTestId("speaker-zones-container");
+      expect(zonesContainer).toHaveClass("md:grid-cols-2");
+
+      // Byt till 1 talare via 'cart'
+      const cartButton = screen.getByTestId("scene-cart");
+      fireEvent.click(cartButton);
+      expect(zonesContainer).toHaveClass("grid-cols-1");
+
+      // Byt till 3 talare via 'heart' (Gruppsamtal)
+      const heartButton = screen.getByTestId("scene-heart");
+      fireEvent.click(heartButton);
+      expect(zonesContainer).toHaveClass("md:grid-cols-3");
+    });
+
+    it("renderar nya färgteman (violet och rose) med WCAG AA-vänlig dämpning i SpeakerZoneView", () => {
+      const testZoneViolet = {
+        id: "speaker-violet",
+        colorTheme: "violet" as const,
+        tiles: [],
+        isActive: true,
+      };
+
+      const { rerender } = render(
+        <SpeakerZoneView
+          zone={testZoneViolet}
+          onSelectTile={vi.fn()}
+        />
+      );
+
+      const violetSection = screen.getByTestId("speaker-zone-speaker-violet");
+      expect(violetSection.className).toContain("bg-violet-50/30");
+      expect(violetSection.className).toContain("border-violet-200/60");
+      expect(violetSection.className).toContain("duration-500");
+
+      const testZoneRose = {
+        id: "speaker-rose",
+        colorTheme: "rose" as const,
+        tiles: [],
+        isActive: false,
+      };
+
+      rerender(
+        <SpeakerZoneView
+          zone={testZoneRose}
+          onSelectTile={vi.fn()}
+        />
+      );
+
+      const roseSection = screen.getByTestId("speaker-zone-speaker-rose");
+      expect(roseSection.className).toContain("bg-rose-50/30");
+      expect(roseSection.className).toContain("border-rose-200/60");
+    });
+
+    it("stödjer flertalar-fika med 3+ talare och unika färgprofiler", () => {
+      render(<AacDisplay />);
+      
+      // Klicka på 'heart' (Gruppsamtal & Omtanke)
+      const heartButton = screen.getByTestId("scene-heart");
+      fireEvent.click(heartButton);
+
+      const zonesContainer = screen.getByTestId("speaker-zones-container");
+      expect(zonesContainer).toBeInTheDocument();
+
+      // Kontrollera att alla 3 talarzoner renderas
+      const speaker1 = screen.getByTestId("speaker-zone-speaker-1");
+      const speaker2 = screen.getByTestId("speaker-zone-speaker-2");
+      const speaker3 = screen.getByTestId("speaker-zone-speaker-3");
+
+      expect(speaker1).toBeInTheDocument();
+      expect(speaker2).toBeInTheDocument();
+      expect(speaker3).toBeInTheDocument();
+
+      // Kontrollera unika färgklasser för talarna
+      expect(speaker1.className).toContain("border-emerald-200/60");
+      expect(speaker2.className).toContain("border-violet-200/60");
+      expect(speaker3.className).toContain("border-rose-200/60");
+    });
   });
 });

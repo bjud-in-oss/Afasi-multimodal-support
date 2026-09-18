@@ -1,4 +1,4 @@
-export type ColorTheme = "stone" | "emerald" | "amber" | "sky";
+export type ColorTheme = "stone" | "emerald" | "amber" | "sky" | "violet" | "rose";
 
 export interface AacTile {
   id: string;

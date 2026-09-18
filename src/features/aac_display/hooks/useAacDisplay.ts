@@ -99,11 +99,11 @@ const SCENARIOS: Record<string, PracticeScenario> = {
   heart: {
     id: "heart",
     scenarioIcon: "heart",
-    speechContext: "Hälsa & Omtanke",
+    speechContext: "Gruppsamtal & Omtanke",
     partnerZones: [
       {
         id: "speaker-1",
-        colorTheme: "stone",
+        colorTheme: "emerald",
         isActive: true,
         tiles: [
           {
@@ -121,6 +121,36 @@ const SCENARIOS: Record<string, PracticeScenario> = {
             isGroundTruth: false,
             speechText: "Känns hjärtat och kroppen i lugn och ro?",
             category: "health",
+          },
+        ],
+      },
+      {
+        id: "speaker-2",
+        colorTheme: "violet",
+        isActive: false,
+        tiles: [
+          {
+            id: "tile-smile-3",
+            iconKey: "smile",
+            confidence: 0.89,
+            isGroundTruth: true,
+            speechText: "Vi är här för att stötta dig idag.",
+            category: "social",
+          },
+        ],
+      },
+      {
+        id: "speaker-3",
+        colorTheme: "rose",
+        isActive: false,
+        tiles: [
+          {
+            id: "tile-water-5",
+            iconKey: "water",
+            confidence: 0.84,
+            isGroundTruth: true,
+            speechText: "Vill du ha lite mer vatten eller vila?",
+            category: "need",
           },
         ],
       },

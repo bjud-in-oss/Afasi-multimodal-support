@@ -11,3 +11,4 @@
    - Grön bock bekräftar tolkning och tonar bort frågetecken.
    - Rött kryss avfärdar tolkning och tar bort brickan från zonen.
 6. **Frikopplad feedback**: Användaren kan godkänna eller avfärda enskilda brickor direkt via mikro-knappar utan att aktivera röstuppläsning.
+7. **Adaptiv flertalarskalning**: Vid 3 eller fler talare arrangeras samtalszonerna i ett harmoniskt rutnät med unika, dämpade WCAG AA-färgteman (inklusive `violet` och `rose`) och mjuk fokusövergång vid talarväxling.
