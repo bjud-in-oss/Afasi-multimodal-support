@@ -10,3 +10,4 @@
 5. **Successiv inlärning**:
    - Grön bock bekräftar tolkning och tonar bort frågetecken.
    - Rött kryss avfärdar tolkning och tar bort brickan från zonen.
+6. **Frikopplad feedback**: Användaren kan godkänna eller avfärda enskilda brickor direkt via mikro-knappar utan att aktivera röstuppläsning.
