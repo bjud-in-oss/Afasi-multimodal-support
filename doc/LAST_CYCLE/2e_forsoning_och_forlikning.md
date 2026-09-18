@@ -1,8 +1,11 @@
-# Steg 2e: Försoning och förlikning (Cykel 4)
+# Steg 2e: Försoning och förlikning (Cykel 5 - TCK-006)
 
-## 1. Avvägning mellan tyst kurering och talad kommunikation
-- Den stora feedbackpanelen (till höger) bibehålls för de fall där deltagaren vill göra ett medvetet, starkt val med talsyntes.
-- De nya mikro-kontrollerna på själva brickorna ger det tysta snabbspåret för diskret rensning och bekräftelse.
-- På detta sätt tillgodoses både behovet av aktivt talstöd och behovet av tyst sanering av AI-förslag.
+## 1. Målkonflikter och deras förlikning
+1. **Flertalighet vs. Kognitiv överbelastning**:
+   - *Konflikt*: Ju fler talare, desto mer visuell data och potentiell stress för användaren.
+   - *Förlikning*: Genom att begränsa antalet samtidiga brickor per zon och använda en lugn, symmetrisk 2x2 grid med subtil fokusring bibehålls ordning och stillhet.
+2. **Färgdiversitet vs. Visuell harmoni**:
+   - *Konflikt*: Många färger kan ge ett rörigt intryck.
+   - *Förlikning*: Genom att hålla färgerna i samma dämpade pastell-/jordtonsfamilj med låg mättnad och enhetliga opaciteter skapas en enhetlig palett.
 
 MÄTTNAD: JA

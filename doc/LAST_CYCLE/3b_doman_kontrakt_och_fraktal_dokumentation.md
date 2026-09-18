@@ -1,11 +1,11 @@
-# Steg 3b: Domänkontrakt och fraktal dokumentation (Cykel 4)
+# Steg 3b: Domänkontrakt & Fraktal Dokumentation (TCK-006)
 
-## 1. Domän: `src/features/symbol_engine/`
-- `domain/types.ts`: Typdefinitioner för ersättningskandidater och symbolmetadata.
-- `domain/symbolEngineService.ts`: Servicelager för återgenerering, Gemini SVG/ikonval och adaptiv integrering.
-- `hooks/useSymbolEngine.ts`: React-hook för tyst kurering.
-- `index.ts`: Publik export.
+## 1. Typ- och Kontraktspecifikation
+```ts
+// src/features/aac_display/domain/types.ts
+export type ColorTheme = 'amber' | 'emerald' | 'sky' | 'slate' | 'violet' | 'rose';
+```
 
-## 2. Uppdateringar i `src/features/aac_display/`
-- `AacTileItem.tsx`: Subtila mikro-kontroller (kryss och bock) för direkt tyst feedback.
-- `useAacDisplay.ts`: Hanterar `handleDismissTileSilent` och `handleConfirmTileSilent` samt triggar asynkron återgenerering.
+## 2. Visuella regler & WCAG
+- Alla teman har motsvarande `border`, `bg`, och `ring`-klasser.
+- `AacDisplay` behåller textlöshet och minst 44px klickyta per knapp/bricka.

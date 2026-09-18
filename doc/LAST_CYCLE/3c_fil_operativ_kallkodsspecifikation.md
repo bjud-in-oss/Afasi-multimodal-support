@@ -1,20 +1,15 @@
-# Steg 3c: Fil-operativ källkodsspecifikation (Cykel 4)
+# Steg 3c: Fil-operativ källkodsspecifikation (TCK-006)
 
-## 1. Nya och ändrade filer i Fas 2 (Steg 4)
-- `src/features/symbol_engine/domain/types.ts`
-- `src/features/symbol_engine/domain/symbolEngineService.ts`
-- `src/features/symbol_engine/index.ts`
-- `src/features/symbol_engine/__tests__/symbolEngineService.test.ts`
-- `src/features/aac_display/components/AacTileItem.tsx`
-- `src/features/aac_display/components/SpeakerZoneView.tsx`
-- `src/features/aac_display/hooks/useAacDisplay.ts`
-- `src/features/aac_display/components/__tests__/AacDisplay.test.tsx`
-
-## 2. Testfall som implementeras i TDD
-1. `it("avfärdar bricka tyst utan att tala vid klick på mikro-kryss")`
-2. `it("bekräftar bricka tyst vid klick på mikro-bock")`
-3. `it("genererar automatiskt en ersättningsbricka efter att en ruta dissats")`
-4. `it("sparar dissad bricka med sänkt konfidens i adaptive_memory")`
-5. `it("förhindrar att en nyligen dissad bricka föreslås som ersättare")`
-
-BESLUT: GODKÄND
+## 1. Målfiler för implementering i Fas 2 (Steg 4)
+1. `src/features/aac_display/domain/types.ts`:
+   - Utöka `ColorTheme` med `'violet' | 'rose'`.
+2. `src/features/aac_display/components/SpeakerZoneView.tsx`:
+   - Lägg till färgmappning för `violet` och `rose`.
+   - Lägg till mjuk `ring-2 ring-opacity-60` och transition för aktiv talarzon.
+3. `src/features/aac_display/components/AacDisplay.tsx`:
+   - Dynamiskt anpassa `grid`-klasser baserat på antal talarzoner:
+     - 1 talare: `grid-cols-1`
+     - 2 talare: `grid-cols-1 md:grid-cols-2`
+     - 3+ talare: `grid-cols-1 md:grid-cols-2 lg:grid-cols-2` eller `grid-cols-1 md:grid-cols-3` för breda vyer.
+4. `src/features/aac_display/components/__tests__/AacDisplay.test.tsx`:
+   - TDD-tester som verifierar rendering och adaptiv grid-klassning med 1, 2, 3 och 4 talarzoner samt rendering av nya färgteman.
