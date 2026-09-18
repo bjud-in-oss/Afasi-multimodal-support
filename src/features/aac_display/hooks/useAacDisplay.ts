@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { AacTile, PracticeScenario, FeedbackRecord, AacDisplayState } from "../domain/types";
 import { defaultAdaptiveMemory } from "../../adaptive_memory";
 import { defaultLiveListener } from "../../live_listener";
+import { defaultSymbolEngine } from "../../symbol_engine";
 
 const SCENARIOS: Record<string, PracticeScenario> = {
   coffee: {
@@ -281,6 +282,59 @@ export function useAacDisplay() {
     defaultLiveListener.setSpeechSynthesizer(originalSynthesizer);
   }, [speakText]);
 
+  // Frikopplad mikro-feedback: Tyst avfärdande med automatisk ersättning i realtid
+  const handleDismissTileSilent = useCallback(
+    async (zoneId: string, tile: AacTile) => {
+      // 1. Töm rutan omedelbart i UI utan talsyntes
+      setState((prev) => ({
+        ...prev,
+        speakerZones: prev.speakerZones.map((zone) =>
+          zone.id === zoneId
+            ? { ...zone, tiles: zone.tiles.filter((t) => t.id !== tile.id) }
+            : zone
+        ),
+      }));
+
+      setSelectedTile((curr) => (curr?.id === tile.id ? null : curr));
+
+      // 2. Spara i adaptiva minnet med sänkt konfidens (<0.50) och hämta ersättare
+      const replacement = await defaultSymbolEngine.requestReplacementTile({
+        zoneId,
+        rejectedTile: tile,
+        contextKey: state.activeScenarioId || "general",
+      });
+
+      // 3. Om ersättare hittades, injicera den mjukt i zonen
+      if (replacement) {
+        setState((prev) => ({
+          ...prev,
+          speakerZones: prev.speakerZones.map((zone) => {
+            if (zone.id === zoneId) {
+              const alreadyPresent = zone.tiles.some((t) => t.iconKey === replacement.iconKey);
+              if (alreadyPresent) return zone;
+              return {
+                ...zone,
+                tiles: [...zone.tiles, replacement].slice(0, 4),
+              };
+            }
+            return zone;
+          }),
+        }));
+      }
+    },
+    [state.activeScenarioId]
+  );
+
+  // Frikopplad mikro-feedback: Tyst bekräftelse utan att läsa upp högt
+  const handleConfirmTileSilent = useCallback(
+    (_zoneId: string, tile: AacTile) => {
+      defaultSymbolEngine.recordSilentConfirmation(state.activeScenarioId || "general", tile);
+      setFeedbackStatus("confirmed");
+      setTimeout(() => setFeedbackStatus(null), 1000);
+    },
+    [state.activeScenarioId]
+  );
+
   // Växla mikrofon och muntligt samtycke
   const toggleListening = useCallback(() => {
     setState((prev) => {
@@ -307,6 +361,8 @@ export function useAacDisplay() {
     handleSelectTile,
     handleConfirm,
     handleReject,
+    handleDismissTileSilent,
+    handleConfirmTileSilent,
     toggleListening,
   };
 }

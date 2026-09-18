@@ -5,9 +5,17 @@ interface SpeakerZoneViewProps {
   zone: SpeakerZone;
   selectedTileId?: string;
   onSelectTile: (tile: AacTile) => void;
+  onDismissTileSilent?: (zoneId: string, tile: AacTile) => void;
+  onConfirmTileSilent?: (zoneId: string, tile: AacTile) => void;
 }
 
-export function SpeakerZoneView({ zone, selectedTileId, onSelectTile }: SpeakerZoneViewProps) {
+export function SpeakerZoneView({
+  zone,
+  selectedTileId,
+  onSelectTile,
+  onDismissTileSilent,
+  onConfirmTileSilent,
+}: SpeakerZoneViewProps) {
   const themeStyles = {
     emerald: "bg-emerald-50/30 border-emerald-200/60",
     amber: "bg-amber-50/30 border-amber-200/60",
@@ -15,7 +23,7 @@ export function SpeakerZoneView({ zone, selectedTileId, onSelectTile }: SpeakerZ
     stone: "bg-stone-50/40 border-stone-200/60",
   }[zone.colorTheme];
 
-  const activePulse = zone.isActive ? "ring-2 ring-stone-400/30" : "";
+  const activePulse = zone.isActive ? "ring-2 ring-emerald-500/40 shadow-sm" : "";
 
   return (
     <section
@@ -30,6 +38,12 @@ export function SpeakerZoneView({ zone, selectedTileId, onSelectTile }: SpeakerZ
             tile={tile}
             isSelected={tile.id === selectedTileId}
             onSelect={onSelectTile}
+            onDismissSilent={
+              onDismissTileSilent ? (t) => onDismissTileSilent(zone.id, t) : undefined
+            }
+            onConfirmSilent={
+              onConfirmTileSilent ? (t) => onConfirmTileSilent(zone.id, t) : undefined
+            }
           />
         ))}
 

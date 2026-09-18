@@ -11,6 +11,8 @@ export function AacDisplay() {
     handleSelectTile,
     handleConfirm,
     handleReject,
+    handleDismissTileSilent,
+    handleConfirmTileSilent,
     toggleListening,
   } = useAacDisplay();
 
@@ -27,6 +29,8 @@ export function AacDisplay() {
             zone={zone}
             selectedTileId={selectedTile?.id}
             onSelectTile={handleSelectTile}
+            onDismissTileSilent={handleDismissTileSilent}
+            onConfirmTileSilent={handleConfirmTileSilent}
           />
         ))}
       </div>

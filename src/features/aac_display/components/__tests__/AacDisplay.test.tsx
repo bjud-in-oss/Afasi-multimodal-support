@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { AacDisplay } from "../AacDisplay";
 
 afterEach(() => {
@@ -45,7 +45,6 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
   it("visar frågetecken-överlägg på brickor med medelhög konfidens (0.50 - 0.79)", () => {
     render(<AacDisplay />);
-    // Välj scen som innehåller både säkra och osäkra gissningar
     fireEvent.click(screen.getByTestId("scene-coffee"));
 
     const questionMarks = screen.getAllByTestId("question-mark-overlay");
@@ -56,7 +55,6 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     render(<AacDisplay />);
     fireEvent.click(screen.getByTestId("scene-coffee"));
 
-    // Verifiera att inga brickor med <0.50 renderas
     const hiddenLowConf = screen.queryByTestId("aac-tile-low-conf");
     expect(hiddenLowConf).not.toBeInTheDocument();
   });
@@ -65,11 +63,9 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     render(<AacDisplay />);
     fireEvent.click(screen.getByTestId("scene-coffee"));
 
-    // Klicka på en osäker bricka
     const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
     fireEvent.click(firstTile);
 
-    // Tryck på rött kryss
     const rejectButton = screen.getByTestId("feedback-reject");
     fireEvent.click(rejectButton);
 
@@ -83,10 +79,39 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
     fireEvent.click(firstTile);
 
-    // Tryck på grön bock
     const confirmButton = screen.getByTestId("feedback-confirm");
     fireEvent.click(confirmButton);
 
+    expect(screen.getByTestId("feedback-status-indicator")).toBeInTheDocument();
+  });
+
+  it("avfärdar bricka tyst vid klick på mikro-kryss och ersätter den i realtid", async () => {
+    render(<AacDisplay />);
+    fireEvent.click(screen.getByTestId("scene-coffee"));
+
+    const microDismissButtons = screen.getAllByTestId(/^micro-dismiss-/);
+    expect(microDismissButtons.length).toBeGreaterThan(0);
+
+    const firstDismissBtn = microDismissButtons[0];
+    fireEvent.click(firstDismissBtn);
+
+    // Brickan avfärdas omedelbart och systemet fyller på med ersättare
+    await waitFor(() => {
+      const currentTiles = screen.getAllByTestId(/^aac-tile-/);
+      expect(currentTiles.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("bekräftar bricka tyst vid klick på mikro-bock", () => {
+    render(<AacDisplay />);
+    fireEvent.click(screen.getByTestId("scene-coffee"));
+
+    const microConfirmButtons = screen.getAllByTestId(/^micro-confirm-/);
+    expect(microConfirmButtons.length).toBeGreaterThan(0);
+
+    fireEvent.click(microConfirmButtons[0]);
+
+    // Visuell bekräftelseindikator ska tändas kortvarigt
     expect(screen.getByTestId("feedback-status-indicator")).toBeInTheDocument();
   });
 
@@ -95,11 +120,9 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     fireEvent.click(screen.getByTestId("scene-coffee"));
     expect(screen.getAllByTestId(/^aac-tile-/).length).toBeGreaterThan(0);
 
-    // Tryck på hem-ikonen för att vila
     const homeSceneButton = screen.getByTestId("scene-home");
     fireEvent.click(homeSceneButton);
 
-    // Samtalszonerna är nu återställda
     const tilesAfterReset = screen.queryAllByTestId(/^aac-tile-/);
     expect(tilesAfterReset.length).toBe(0);
   });
