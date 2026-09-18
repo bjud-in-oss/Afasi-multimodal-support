@@ -243,4 +243,50 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       expect(statusDot.className).toMatch(/bg-amber-400|bg-emerald-500/);
     });
   });
+
+  describe("Dold diagnostikpanel och realtidslogg (TCK-006B)", () => {
+    it("håller diagnostikpanelen dold som standard för en textlös upplevelse", () => {
+      render(<AacDisplay />);
+      expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
+    });
+
+    it("öppnar diagnostikpanelen vid dubbelklick på statuspricken och stänger den via stängknapp", () => {
+      render(<AacDisplay />);
+
+      const statusDot = screen.getByTestId("live-status-dot");
+      expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
+
+      // Dubbelklicka på statuspricken
+      fireEvent.doubleClick(statusDot);
+
+      // Panelen ska nu visas
+      const diagPanel = screen.getByTestId("diagnostics-panel");
+      expect(diagPanel).toBeInTheDocument();
+      expect(screen.getByTestId("diagnostics-event-status")).toBeInTheDocument();
+
+      // Stäng via stängknappen
+      const closeBtn = screen.getByTestId("btn-close-diagnostics");
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
+    });
+
+    it("växlar diagnostikpanelen vid snabbt dubbeltryck (klick)", () => {
+      render(<AacDisplay />);
+
+      const statusDot = screen.getByTestId("live-status-dot");
+
+      // Första klicket
+      fireEvent.click(statusDot);
+      expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
+
+      // Andra klicket inom kort tid (<400ms)
+      fireEvent.click(statusDot);
+      expect(screen.getByTestId("diagnostics-panel")).toBeInTheDocument();
+
+      // Ytterligare snabbt klick stänger igen
+      fireEvent.click(statusDot);
+      expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
+    });
+  });
 });

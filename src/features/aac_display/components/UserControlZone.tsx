@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import {
   Coffee,
   ShoppingCart,
@@ -14,6 +15,7 @@ interface UserControlZoneProps {
   hasSelectedTile: boolean;
   isListening: boolean;
   connectionStatus?: "disconnected" | "connecting" | "active";
+  lastEventStatus?: string;
   feedbackStatus: "confirmed" | "rejected" | null;
   onSelectScenario: (key: "coffee" | "cart" | "heart" | "home") => void;
   onConfirm: () => void;
@@ -26,12 +28,31 @@ export function UserControlZone({
   hasSelectedTile,
   isListening,
   connectionStatus = "disconnected",
+  lastEventStatus = "Frånkopplad (Väntar på aktivering)",
   feedbackStatus,
   onSelectScenario,
   onConfirm,
   onReject,
   onToggleListening,
 }: UserControlZoneProps) {
+  // Dold diagnostikpanel för felsökning av Gemini Live utan att störa det kognitiva AAC-gränssnittet
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const lastTapRef = useRef<number>(0);
+
+  // Dubbelklick eller snabbt dubbeltryck på statuspricken växlar diagnostikpanelen
+  const handleDotClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTapRef.current < 400) {
+      setShowDiagnostics((prev) => !prev);
+    }
+    lastTapRef.current = now;
+  };
+
+  const handleDotDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDiagnostics((prev) => !prev);
+  };
   return (
     <aside
       data-testid="aac-user-control-zone"
@@ -165,17 +186,22 @@ export function UserControlZone({
           {/* Visuell statussymbol för Gemini Live-anslutning:
               - Röd/Grå punkt: Frånkopplad / Inget API-svar
               - Gul punkt: Ansluter till Gemini Live...
-              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar efter samtal/väckningsord ("Maggan") */}
+              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar efter samtal/väckningsord ("Maggan")
+              - Dubbelklick/tryck: Växlar dold diagnostikpanel */}
           <span
             data-testid="live-status-dot"
+            role="button"
+            tabIndex={0}
+            onClick={handleDotClick}
+            onDoubleClick={handleDotDoubleClick}
             aria-label={
               connectionStatus === "active"
-                ? "Live-anslutning aktiv och lyssnar"
+                ? "Live-anslutning aktiv och lyssnar (Dubbelklicka för diagnostik)"
                 : connectionStatus === "connecting"
-                ? "Ansluter till Gemini Live"
-                : "Frånkopplad"
+                ? "Ansluter till Gemini Live (Dubbelklicka för diagnostik)"
+                : "Frånkopplad (Dubbelklicka för diagnostik)"
             }
-            className={`absolute top-3.5 right-3.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-all duration-300 ${
+            className={`absolute top-3.5 right-3.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-all duration-300 cursor-pointer ${
               connectionStatus === "active"
                 ? "bg-emerald-500 animate-pulse ring-2 ring-emerald-400/50"
                 : connectionStatus === "connecting"
@@ -185,6 +211,46 @@ export function UserControlZone({
           />
         </button>
       </div>
+
+      {/* Diskret felsökningsrad i gränssnittet längst ner på skärmen */}
+      {showDiagnostics && (
+        <div
+          data-testid="diagnostics-panel"
+          className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 text-emerald-400 border-t border-stone-800 px-4 py-2 font-mono text-xs flex items-center justify-between shadow-2xl backdrop-blur-md select-text"
+        >
+          <div className="flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                connectionStatus === "active"
+                  ? "bg-emerald-400 animate-pulse"
+                  : connectionStatus === "connecting"
+                  ? "bg-amber-400 animate-ping"
+                  : "bg-stone-500"
+              }`}
+            />
+            <span className="text-stone-400">STATUS:</span>
+            <span className="font-semibold text-emerald-300 uppercase">
+              {connectionStatus}
+            </span>
+            <span className="text-stone-600">|</span>
+            <span
+              data-testid="diagnostics-event-status"
+              className="text-stone-300 truncate"
+            >
+              {lastEventStatus}
+            </span>
+          </div>
+          <button
+            type="button"
+            data-testid="btn-close-diagnostics"
+            onClick={() => setShowDiagnostics(false)}
+            className="ml-4 px-2 py-0.5 rounded text-stone-400 hover:text-white hover:bg-stone-800 text-xs transition-colors cursor-pointer"
+            aria-label="Stäng diagnostik"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

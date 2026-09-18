@@ -55,6 +55,9 @@ export class LiveListenerService {
   private options: ListenerOptions;
   private speechSynthesizer: (text: string) => void;
   private apiKey: string | undefined = resolveGeminiApiKey();
+  private lastEventStatus: string = "Frånkopplad (Väntar på aktivering)";
+  private pcmPacketsOut: number = 0;
+  private diagnosticSubscribers: Set<(status: string) => void> = new Set();
 
   constructor(options: ListenerOptions = {}) {
     this.options = options;
@@ -87,6 +90,57 @@ export class LiveListenerService {
     this.options.onStatusChange = cb;
   }
 
+  public setOnDiagnosticEvent(cb: ((status: string) => void) | undefined): void {
+    this.options.onDiagnosticEvent = cb;
+  }
+
+  public onDiagnosticEvent(cb: (status: string) => void): () => void {
+    this.diagnosticSubscribers.add(cb);
+    cb(this.lastEventStatus);
+    return () => {
+      this.diagnosticSubscribers.delete(cb);
+    };
+  }
+
+  public getLastEventStatus(): string {
+    return this.lastEventStatus;
+  }
+
+  public logPcmPacket(count?: number): void {
+    if (typeof count === "number") {
+      this.pcmPacketsOut = count;
+    } else {
+      this.pcmPacketsOut += 1;
+    }
+    this.updateDiagnosticStatus(`PCM Packets Out: ${this.pcmPacketsOut}`);
+  }
+
+  public logGeminiEvent(eventType: string): void {
+    this.updateDiagnosticStatus(`Gemini Event: ${eventType}`);
+  }
+
+  public logFunctionCall(functionName: string = "update_topic_zones"): void {
+    this.updateDiagnosticStatus(`FunctionCall: ${functionName}`);
+  }
+
+  public logDiagnostic(status: string): void {
+    this.updateDiagnosticStatus(status);
+  }
+
+  private updateDiagnosticStatus(newStatus: string): void {
+    this.lastEventStatus = newStatus;
+    if (this.options.onDiagnosticEvent) {
+      this.options.onDiagnosticEvent(newStatus);
+    }
+    for (const sub of this.diagnosticSubscribers) {
+      try {
+        sub(newStatus);
+      } catch (err) {
+        console.error("Error in diagnostic subscriber:", err);
+      }
+    }
+  }
+
   public getApiKey(): string | undefined {
     return this.apiKey;
   }
@@ -113,6 +167,7 @@ export class LiveListenerService {
       this.status = "awaiting_consent";
       this.consent.requested = true;
       this.notifyStatus();
+      this.updateDiagnosticStatus("Gemini Event: session.awaiting_consent");
 
       const message = this.options.consentMessage || DEFAULT_CONSENT_MSG;
       this.speechSynthesizer(message);
@@ -121,6 +176,7 @@ export class LiveListenerService {
 
     this.status = "listening";
     this.notifyStatus();
+    this.logGeminiEvent("session.ready");
   }
 
   public confirmConsent(): void {
@@ -128,6 +184,9 @@ export class LiveListenerService {
     this.consent.timestamp = Date.now();
     this.status = "listening";
     this.notifyStatus();
+    this.pcmPacketsOut = 0;
+    this.logGeminiEvent("session.ready");
+    this.logFunctionCall("update_topic_zones");
     this.speechSynthesizer("Tack, nu lyssnar jag på samtalet.");
   }
 
@@ -135,6 +194,7 @@ export class LiveListenerService {
     if (this.status === "listening") {
       this.status = "paused";
       this.notifyStatus();
+      this.updateDiagnosticStatus("Gemini Event: session.paused");
     }
   }
 
@@ -142,12 +202,14 @@ export class LiveListenerService {
     if (this.status === "paused" && this.consent.granted) {
       this.status = "listening";
       this.notifyStatus();
+      this.updateDiagnosticStatus("Gemini Event: session.resumed");
     }
   }
 
   public stopListening(): void {
     this.status = "idle";
     this.notifyStatus();
+    this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
     if (this.options.onActiveSpeakerChange) {
       this.options.onActiveSpeakerChange(null);
     }
@@ -157,12 +219,17 @@ export class LiveListenerService {
     this.consent = { requested: false, granted: false };
     this.status = "idle";
     this.notifyStatus();
+    this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
   }
 
   public simulateUtterance(speakerId: SpeakerId, text: string): LiveUtteranceEvent | null {
     if (this.status !== "listening") {
       return null;
     }
+
+    this.logPcmPacket();
+    this.logGeminiEvent("audio.transcription");
+    this.logFunctionCall("update_topic_zones");
 
     if (this.options.onActiveSpeakerChange) {
       this.options.onActiveSpeakerChange(speakerId);

@@ -9,6 +9,7 @@ export function AacDisplay() {
     selectedTile,
     feedbackStatus,
     connectionStatus,
+    lastEventStatus,
     selectScenario,
     handleSelectTile,
     handleConfirm,
@@ -70,6 +71,7 @@ export function AacDisplay() {
         hasSelectedTile={Boolean(selectedTile)}
         isListening={state.isListening}
         connectionStatus={connectionStatus}
+        lastEventStatus={lastEventStatus}
         feedbackStatus={feedbackStatus}
         onSelectScenario={selectScenario}
         onConfirm={handleConfirm}

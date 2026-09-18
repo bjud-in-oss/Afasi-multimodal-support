@@ -180,6 +180,9 @@ export function useAacDisplay() {
   const [listenerStatus, setListenerStatus] = useState<ListenerStatus>(
     defaultLiveListener.getStatus()
   );
+  const [lastEventStatus, setLastEventStatus] = useState<string>(
+    defaultLiveListener.getLastEventStatus()
+  );
   const [selectedTile, setSelectedTile] = useState<AacTile | null>(null);
   const [feedbackStatus, setFeedbackStatus] = useState<"confirmed" | "rejected" | null>(null);
 
@@ -332,6 +335,10 @@ export function useAacDisplay() {
       setListenerStatus(status);
     });
 
+    const unsubDiag = defaultLiveListener.onDiagnosticEvent((status) => {
+      setLastEventStatus(status);
+    });
+
     const COLOR_PALETTE: ColorTheme[] = [
       "emerald",
       "amber",
@@ -394,6 +401,10 @@ export function useAacDisplay() {
         })),
       }));
     });
+
+    return () => {
+      unsubDiag();
+    };
   }, [speakText]);
 
   // Frikopplad mikro-feedback: Tyst avfärdande med automatisk ersättning i realtid
@@ -484,5 +495,6 @@ export function useAacDisplay() {
     handleConfirmTileSilent,
     toggleListening,
     connectionStatus,
+    lastEventStatus,
   };
 }

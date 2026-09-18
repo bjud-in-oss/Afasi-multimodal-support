@@ -28,5 +28,6 @@ export interface ListenerOptions {
   onUtterance?: (event: LiveUtteranceEvent) => void;
   onStatusChange?: (status: ListenerStatus) => void;
   onActiveSpeakerChange?: (speakerId: SpeakerId | null) => void;
+  onDiagnosticEvent?: (status: string) => void;
   consentMessage?: string;
 }

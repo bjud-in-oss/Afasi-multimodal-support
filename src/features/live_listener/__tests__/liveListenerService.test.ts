@@ -92,4 +92,30 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
     expect(service.getStatus()).toBe("connecting");
     expect(statusLogs).toContain("connecting");
   });
+
+  it("loggar realtidshändelser och exponerar lastEventStatus för diagnostik (TCK-006B)", () => {
+    const diagnosticLogs: string[] = [];
+    const unsub = service.onDiagnosticEvent((status) => {
+      diagnosticLogs.push(status);
+    });
+
+    service.logPcmPacket(1);
+    expect(service.getLastEventStatus()).toBe("PCM Packets Out: 1");
+
+    service.logPcmPacket();
+    expect(service.getLastEventStatus()).toBe("PCM Packets Out: 2");
+
+    service.logGeminiEvent("session.ready");
+    expect(service.getLastEventStatus()).toBe("Gemini Event: session.ready");
+
+    service.logFunctionCall("update_topic_zones");
+    expect(service.getLastEventStatus()).toBe("FunctionCall: update_topic_zones");
+
+    expect(diagnosticLogs).toContain("PCM Packets Out: 1");
+    expect(diagnosticLogs).toContain("PCM Packets Out: 2");
+    expect(diagnosticLogs).toContain("Gemini Event: session.ready");
+    expect(diagnosticLogs).toContain("FunctionCall: update_topic_zones");
+
+    unsub();
+  });
 });
