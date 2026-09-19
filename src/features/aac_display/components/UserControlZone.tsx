@@ -4,19 +4,29 @@ import {
   ShoppingCart,
   Heart,
   Home,
+  Cake,
+  GlassWater,
+  Apple,
+  Pill,
+  Smile,
+  Sun,
+  HelpCircle,
   Check,
   X,
   Mic,
   MicOff,
 } from "lucide-react";
+import { AacTile } from "../domain/types";
 
 interface UserControlZoneProps {
+  controlTiles?: AacTile[];
   activeScenarioId: string | null;
   hasSelectedTile: boolean;
   isListening: boolean;
   connectionStatus?: "disconnected" | "connecting" | "active";
   lastEventStatus?: string;
   feedbackStatus: "confirmed" | "rejected" | null;
+  onSelectControlTile?: (tile: AacTile) => void;
   onSelectScenario: (key: "coffee" | "cart" | "heart" | "home") => void;
   onConfirm: () => void;
   onReject: () => void;
@@ -24,12 +34,14 @@ interface UserControlZoneProps {
 }
 
 export function UserControlZone({
+  controlTiles = [],
   activeScenarioId,
   hasSelectedTile,
   isListening,
   connectionStatus = "disconnected",
   lastEventStatus = "Frånkopplad (Väntar på aktivering)",
   feedbackStatus,
+  onSelectControlTile,
   onSelectScenario,
   onConfirm,
   onReject,
@@ -53,64 +65,87 @@ export function UserControlZone({
     e.stopPropagation();
     setShowDiagnostics((prev) => !prev);
   };
+
+  const renderControlIcon = (tile: AacTile) => {
+    if (tile.customSvg) {
+      return (
+        <div
+          data-testid={`custom-svg-${tile.id}`}
+          className="w-8 h-8 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+          dangerouslySetInnerHTML={{ __html: tile.customSvg }}
+        />
+      );
+    }
+    const props = { className: "w-8 h-8 stroke-[1.75]" };
+    switch (tile.iconKey) {
+      case "coffee":
+        return <Coffee {...props} />;
+      case "cart":
+        return <ShoppingCart {...props} />;
+      case "heart":
+        return <Heart {...props} />;
+      case "home":
+        return <Home {...props} />;
+      case "cake":
+        return <Cake {...props} />;
+      case "water":
+        return <GlassWater {...props} />;
+      case "apple":
+        return <Apple {...props} />;
+      case "pill":
+        return <Pill {...props} />;
+      case "smile":
+        return <Smile {...props} />;
+      case "sun":
+        return <Sun {...props} />;
+      default:
+        return <HelpCircle {...props} />;
+    }
+  };
+
   return (
     <aside
       data-testid="aac-user-control-zone"
       className="w-full lg:w-80 p-5 rounded-3xl border border-stone-300/80 bg-stone-100/90 flex flex-col gap-5 shadow-sm"
     >
-      {/* 1. Scen-brickor för att initiera låtsassamtal utan menyer eller text */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          data-testid="scene-coffee"
-          onClick={() => onSelectScenario("coffee")}
-          aria-label="Fika"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "coffee"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <Coffee className="w-8 h-8 stroke-[1.75]" />
-        </button>
+      {/* 1. Dynamiskt uppdaterade kontrollbrickor (4 mest relevanta baserat på samtal, kamera, klockslag och AdaptiveMemory) */}
+      <div data-testid="dynamic-control-tiles" className="grid grid-cols-2 gap-3">
+        {controlTiles.map((tile) => {
+          const isScenario = ["coffee", "cart", "heart", "home"].includes(tile.iconKey);
+          const isSelected = activeScenarioId === tile.iconKey;
 
-        <button
-          type="button"
-          data-testid="scene-cart"
-          onClick={() => onSelectScenario("cart")}
-          aria-label="Handla"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "cart"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <ShoppingCart className="w-8 h-8 stroke-[1.75]" />
-        </button>
-
-        <button
-          type="button"
-          data-testid="scene-heart"
-          onClick={() => onSelectScenario("heart")}
-          aria-label="Hälsa"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "heart"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <Heart className="w-8 h-8 stroke-[1.75]" />
-        </button>
-
-        <button
-          type="button"
-          data-testid="scene-home"
-          onClick={() => onSelectScenario("home")}
-          aria-label="Vila och återställ"
-          className="p-4 aspect-square rounded-2xl border bg-white text-stone-700 border-stone-200 hover:bg-stone-50 flex items-center justify-center transition-all cursor-pointer"
-        >
-          <Home className="w-8 h-8 stroke-[1.75]" />
-        </button>
+          return (
+            <button
+              key={tile.id}
+              type="button"
+              data-testid={`scene-${tile.iconKey}`}
+              data-control-tile={tile.iconKey}
+              onClick={() => {
+                if (onSelectControlTile) {
+                  onSelectControlTile(tile);
+                }
+                if (isScenario) {
+                  onSelectScenario(tile.iconKey as any);
+                }
+              }}
+              aria-label={tile.speechText}
+              className={`p-4 aspect-square rounded-2xl border flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+                isSelected
+                  ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
+                  : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50 shadow-xs"
+              }`}
+            >
+              {renderControlIcon(tile)}
+              {tile.enrichmentStage === "camera_enriched" && (
+                <span
+                  data-testid={`control-camera-badge-${tile.id}`}
+                  title={`Identifierat via kamera: ${tile.detectedObject || "objekt"}`}
+                  className="absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full bg-sky-500 ring-2 ring-white animate-pulse"
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* 2. Feedbackreglage: Grön bock och Rött kryss för successiv inlärning */}

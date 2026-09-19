@@ -17,6 +17,7 @@ export function AacDisplay() {
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,
+    dynamicControlTiles,
   } = useAacDisplay();
 
   const zoneCount = state.speakerZones.length;
@@ -65,14 +66,16 @@ export function AacDisplay() {
         )}
       </div>
 
-      {/* Afasideltagarens dedikerade kontrollzon med scen-brickor och feedback */}
+      {/* Afasideltagarens dedikerade kontrollzon med dynamiska brickor och feedback */}
       <UserControlZone
+        controlTiles={dynamicControlTiles}
         activeScenarioId={state.activeScenarioId}
         hasSelectedTile={Boolean(selectedTile)}
         isListening={state.isListening}
         connectionStatus={connectionStatus}
         lastEventStatus={lastEventStatus}
         feedbackStatus={feedbackStatus}
+        onSelectControlTile={handleSelectTile}
         onSelectScenario={selectScenario}
         onConfirm={handleConfirm}
         onReject={handleReject}
