@@ -6,15 +6,27 @@
 
 export type CameraStatus = 'inactive' | 'requesting' | 'active' | 'error';
 
+export interface CameraManagerConfig {
+  minIntervalMs?: number;    // Standard: 1000 (Absolut lägsta gräns)
+  idleIntervalMs?: number;   // Standard: 5000 (Vilopuls)
+  burstIntervalMs?: number;  // Standard: 1500 (Burst frekvens)
+  burstDurationMs?: number;  // Standard: 6000 (Hur länge burst varar)
+  pixelDeltaThreshold?: number; // Standard: 0.12 (Procentuell luminansskillnad för rörelse)
+}
+
 export interface CameraManager {
   start(): Promise<MediaStream | null>;
   stop(): void;
   captureFrameJpeg(): string | null;
+  triggerBurst(reason?: string): void;
+  checkMotionPixelDelta(): boolean;
+  getNextIntervalMs(): number;
   isActive(): boolean;
   getStatus(): CameraStatus;
 }
 
 export interface PcmAudioPlayer {
+  resume(): Promise<void>;
   enqueuePcmChunk(base64Pcm: string): void;
   interrupt(): void;
   close(): void;
@@ -42,6 +54,7 @@ export interface LiveListenerOptions {
 ```
 
 ## 2. Visuella regler och tillgänglighet
-- Kamera- och mikrofontillstånd visualiseras med tydliga, lugna ikoner utan störande flimmer.
-- När lyssnandet avslutas ska kameran vara bevisligen frikopplad (inga kvarvarande tracks).
+- Kamera- och mikrofontillstånd visualiseras med tydliga ikoner.
+- Klick-handlern i UI triggar synkront ljudaktivering (`audioContext.resume()`) vilket garanterar att användaren aldrig drabbas av tystnade ljudströmmar.
+- När lyssnandet avslutas ska kameran vara bevisligen frikopplad (inga kvarvarande aktiva tracks).
 - Alla tidsangivelser och kontexter formateras på svenska för att passa användarens hemmiljö.
