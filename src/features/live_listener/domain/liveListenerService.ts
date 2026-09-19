@@ -1,6 +1,16 @@
-import { ListenerStatus, ListenerOptions, SpeakerId, LiveUtteranceEvent, ConsentState } from "./types";
+import {
+  ListenerStatus,
+  ListenerOptions,
+  SpeakerId,
+  LiveUtteranceEvent,
+  ConsentState,
+  CameraStatus,
+} from "./types";
 import { AacTile } from "../../aac_display/domain/types";
 import { defaultAdaptiveMemory } from "../../adaptive_memory";
+import { CameraManager } from "./cameraManager";
+import { PcmPlayer } from "./pcmPlayer";
+import { formatTemporalInstruction } from "./temporalContext";
 
 const resolveGeminiApiKey = (): string | undefined => {
   if (typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
@@ -19,7 +29,6 @@ const resolveGeminiApiKey = (): string | undefined => {
 const DEFAULT_CONSENT_MSG =
   "Hej! För att stödja Kalle i samtalet lyssnar jag och skapar bilder av vad vi pratar om. Är det okej för alla i rummet?";
 
-// Ordbok för direkt matchning av talade begrepp till symbolnycklar
 const VOCABULARY_MAP: Record<
   string,
   { iconKey: AacTile["iconKey"]; speechText: string; baseConfidence: number }
@@ -59,8 +68,22 @@ export class LiveListenerService {
   private pcmPacketsOut: number = 0;
   private diagnosticSubscribers: Set<(status: string) => void> = new Set();
 
+  private cameraManager: CameraManager;
+  private pcmPlayer: PcmPlayer;
+  private cameraFrameTimer: any = null;
+  private isProcessingFrame: boolean = false;
+  private liveSession: any = null;
+
   constructor(options: ListenerOptions = {}) {
-    this.options = options;
+    this.options = {
+      model: "models/gemini-3.8-live",
+      enableCamera: true,
+      enableTimeAwareness: true,
+      ...options,
+    };
+    this.cameraManager = CameraManager.getInstance();
+    this.pcmPlayer = new PcmPlayer(24000);
+
     this.speechSynthesizer = (text: string) => {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
@@ -70,6 +93,30 @@ export class LiveListenerService {
         window.speechSynthesis.speak(utterance);
       }
     };
+  }
+
+  public getModel(): string {
+    return this.options.model || "models/gemini-3.8-live";
+  }
+
+  public setModel(model: string): void {
+    this.options.model = model;
+  }
+
+  public getCameraManager(): CameraManager {
+    return this.cameraManager;
+  }
+
+  public getPcmPlayer(): PcmPlayer {
+    return this.pcmPlayer;
+  }
+
+  public async resumeAudio(): Promise<void> {
+    await this.pcmPlayer.resume();
+  }
+
+  public triggerCameraBurst(reason?: string): void {
+    this.cameraManager.triggerBurst(reason);
   }
 
   public setSpeechSynthesizer(fn: (text: string) => void): void {
@@ -88,6 +135,10 @@ export class LiveListenerService {
 
   public setOnStatusChange(cb: ((status: ListenerStatus) => void) | undefined): void {
     this.options.onStatusChange = cb;
+  }
+
+  public setOnCameraStatusChange(cb: ((status: CameraStatus) => void) | undefined): void {
+    this.options.onCameraStatusChange = cb;
   }
 
   public setOnDiagnosticEvent(cb: ((status: string) => void) | undefined): void {
@@ -153,6 +204,10 @@ export class LiveListenerService {
     return this.status;
   }
 
+  public getCameraStatus(): CameraStatus {
+    return this.cameraManager.getStatus();
+  }
+
   public isConsentGranted(): boolean {
     return this.consent.granted;
   }
@@ -162,7 +217,7 @@ export class LiveListenerService {
     this.notifyStatus();
   }
 
-  public startListening(): void {
+  public async startListening(): Promise<void> {
     if (!this.consent.granted) {
       this.status = "awaiting_consent";
       this.consent.requested = true;
@@ -174,23 +229,33 @@ export class LiveListenerService {
       return;
     }
 
-    this.status = "listening";
-    this.notifyStatus();
-    this.logGeminiEvent("session.ready");
+    await this.activateSession();
   }
 
-  public confirmConsent(): void {
+  public async confirmConsent(): Promise<void> {
     this.consent.granted = true;
     this.consent.timestamp = Date.now();
-    this.status = "listening";
-    this.notifyStatus();
-    this.pcmPacketsOut = 0;
-    this.logGeminiEvent("session.ready");
-    this.logFunctionCall("update_topic_zones");
+    await this.activateSession();
     this.speechSynthesizer("Tack, nu lyssnar jag på samtalet.");
   }
 
+  private async activateSession(): Promise<void> {
+    this.status = "listening";
+    this.notifyStatus();
+    this.pcmPacketsOut = 0;
+    this.logGeminiEvent(`session.ready [Model: ${this.getModel()}]`);
+    this.logFunctionCall("update_topic_zones");
+
+    // Starta kameran vid aktivt lyssnande om tillåtet
+    if (this.options.enableCamera !== false) {
+      await this.cameraManager.start();
+      this.notifyCameraStatus();
+      this.scheduleNextCameraFrame();
+    }
+  }
+
   public pauseListening(): void {
+    this.stopCameraAndTimers();
     if (this.status === "listening") {
       this.status = "paused";
       this.notifyStatus();
@@ -198,10 +263,9 @@ export class LiveListenerService {
     }
   }
 
-  public resumeListening(): void {
+  public async resumeListening(): Promise<void> {
     if (this.status === "paused" && this.consent.granted) {
-      this.status = "listening";
-      this.notifyStatus();
+      await this.activateSession();
       this.updateDiagnosticStatus("Gemini Event: session.resumed");
     }
   }
@@ -210,6 +274,8 @@ export class LiveListenerService {
     this.status = "idle";
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
+    this.stopCameraAndTimers();
+    this.pcmPlayer.interrupt();
     if (this.options.onActiveSpeakerChange) {
       this.options.onActiveSpeakerChange(null);
     }
@@ -220,6 +286,78 @@ export class LiveListenerService {
     this.status = "idle";
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
+    this.stopCameraAndTimers();
+    this.pcmPlayer.interrupt();
+  }
+
+  private stopCameraAndTimers(): void {
+    if (this.cameraFrameTimer) {
+      clearTimeout(this.cameraFrameTimer);
+      this.cameraFrameTimer = null;
+    }
+    this.cameraManager.stop();
+    this.notifyCameraStatus();
+  }
+
+  private notifyCameraStatus(): void {
+    if (this.options.onCameraStatusChange) {
+      this.options.onCameraStatusChange(this.cameraManager.getStatus());
+    }
+  }
+
+  private scheduleNextCameraFrame(): void {
+    if (this.status !== "listening" || !this.cameraManager.isActive()) {
+      return;
+    }
+
+    const interval = this.cameraManager.getNextIntervalMs();
+    this.cameraFrameTimer = setTimeout(async () => {
+      await this.processCameraFrame();
+      this.scheduleNextCameraFrame();
+    }, interval);
+  }
+
+  private async processCameraFrame(): Promise<void> {
+    if (this.status !== "listening" || !this.cameraManager.isActive() || this.isProcessingFrame) {
+      return;
+    }
+
+    this.isProcessingFrame = true;
+    try {
+      // Kontrollera Pixel-Delta rörelse
+      this.cameraManager.checkMotionPixelDelta();
+
+      // Kontrollera rate limit
+      if (this.cameraManager.canSendFrameNow()) {
+        const jpegBase64 = this.cameraManager.captureFrameJpeg();
+        if (jpegBase64) {
+          this.cameraManager.recordFrameSent();
+          this.logDiagnostic(
+            `Kamera Frame Sänd (${this.cameraManager.isBurstActive() ? "Burst 1.5s" : "Idle 5.0s"})`
+          );
+          if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
+            this.liveSession.sendRealtimeInput({
+              video: { data: jpegBase64, mimeType: "image/jpeg" },
+            });
+          }
+        }
+      }
+    } finally {
+      this.isProcessingFrame = false;
+    }
+  }
+
+  public handleIncomingModelAudio(base64Pcm: string): void {
+    this.pcmPlayer.enqueuePcmChunk(base64Pcm);
+  }
+
+  public handleIncomingInterruption(): void {
+    this.pcmPlayer.interrupt();
+    this.logGeminiEvent("interrupted");
+  }
+
+  public getTemporalInstructionFragment(): string {
+    return formatTemporalInstruction(new Date());
   }
 
   public simulateUtterance(speakerId: SpeakerId, text: string): LiveUtteranceEvent | null {
@@ -231,9 +369,11 @@ export class LiveListenerService {
     this.logGeminiEvent("audio.transcription");
     this.logFunctionCall("update_topic_zones");
 
+    // Talarväxling aktiverar automatiskt Burst-läge i kameramotorn
+    this.cameraManager.triggerBurst("speaker_turn");
+
     if (this.options.onActiveSpeakerChange) {
       this.options.onActiveSpeakerChange(speakerId);
-      // Rensa aktiv markör efter en stund
       setTimeout(() => {
         if (this.options.onActiveSpeakerChange) {
           this.options.onActiveSpeakerChange(null);
@@ -244,7 +384,6 @@ export class LiveListenerService {
     const lower = text.toLowerCase();
     const rawTiles: AacTile[] = [];
 
-    // Hitta matchande symboler i meningen
     for (const [word, config] of Object.entries(VOCABULARY_MAP)) {
       if (lower.includes(word)) {
         rawTiles.push({
@@ -257,7 +396,6 @@ export class LiveListenerService {
       }
     }
 
-    // Applicera användarens historiskt inlärda vikter från adaptive_memory
     const contextKey = "general";
     const weightedTiles = defaultAdaptiveMemory.applyLearnedWeights(contextKey, rawTiles);
 

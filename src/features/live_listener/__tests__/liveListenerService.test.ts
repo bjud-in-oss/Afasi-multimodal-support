@@ -118,4 +118,44 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
 
     unsub();
   });
+
+  it("använder 'models/gemini-3.8-live' som standardmodell och tillåter modelländring (TCK-006C)", () => {
+    expect(service.getModel()).toBe("models/gemini-3.8-live");
+    service.setModel("models/gemini-3.8-flash");
+    expect(service.getModel()).toBe("models/gemini-3.8-flash");
+  });
+
+  it("stänger av kameran fullständigt vid stopListening och pauseListening (TCK-006C)", () => {
+    const cameraManager = service.getCameraManager();
+    const stopSpy = vi.spyOn(cameraManager, "stop");
+
+    service.stopListening();
+    expect(stopSpy).toHaveBeenCalled();
+
+    service.pauseListening();
+    expect(stopSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("vidarebefordrar inkommande modell-audio till pcmPlayer utan lokal talsyntes (TCK-006C)", () => {
+    const pcmPlayer = service.getPcmPlayer();
+    const enqueueSpy = vi.spyOn(pcmPlayer, "enqueuePcmChunk");
+
+    service.handleIncomingModelAudio("dGVzdA==");
+    expect(enqueueSpy).toHaveBeenCalledWith("dGVzdA==");
+  });
+
+  it("avbryter pcmPlayer omedelbart vid handleIncomingInterruption (TCK-006C)", () => {
+    const pcmPlayer = service.getPcmPlayer();
+    const interruptSpy = vi.spyOn(pcmPlayer, "interrupt");
+
+    service.handleIncomingInterruption();
+    expect(interruptSpy).toHaveBeenCalled();
+  });
+
+  it("genererar tidsmedvetet systeminstruktionsfragment med aktuell tid (TCK-006C)", () => {
+    const fragment = service.getTemporalInstructionFragment();
+    expect(fragment).toContain("AKTUELL LOKAL TID");
+    expect(fragment).toContain("Dygnsfas");
+  });
 });
+

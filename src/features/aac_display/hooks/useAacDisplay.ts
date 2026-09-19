@@ -462,6 +462,9 @@ export function useAacDisplay() {
 
   // Växla mikrofon och muntligt samtycke
   const toggleListening = useCallback(() => {
+    // Web Audio Autoplay Policy: resume() anropas synkront i användarens klick
+    defaultLiveListener.resumeAudio().catch(() => {});
+
     setState((prev) => {
       const nextListening = !prev.isListening;
       if (nextListening) {
