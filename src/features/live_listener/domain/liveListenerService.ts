@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import {
   ListenerStatus,
   ListenerOptions,
@@ -73,6 +74,7 @@ export class LiveListenerService {
   private cameraFrameTimer: any = null;
   private isProcessingFrame: boolean = false;
   private liveSession: any = null;
+  private micActivatedByClick: boolean = false;
 
   constructor(options: ListenerOptions = {}) {
     this.options = {
@@ -109,6 +111,14 @@ export class LiveListenerService {
 
   public getPcmPlayer(): PcmPlayer {
     return this.pcmPlayer;
+  }
+
+  public isMicActivatedByClick(): boolean {
+    return this.micActivatedByClick;
+  }
+
+  public setMicActivatedByClick(active: boolean): void {
+    this.micActivatedByClick = active;
   }
 
   public async resumeAudio(): Promise<void> {
@@ -217,7 +227,10 @@ export class LiveListenerService {
     this.notifyStatus();
   }
 
-  public async startListening(): Promise<void> {
+  public async startListening(fromUserMicClick: boolean = false): Promise<void> {
+    if (fromUserMicClick) {
+      this.micActivatedByClick = true;
+    }
     if (!this.consent.granted) {
       this.status = "awaiting_consent";
       this.consent.requested = true;
@@ -232,11 +245,18 @@ export class LiveListenerService {
     await this.activateSession();
   }
 
-  public async confirmConsent(): Promise<void> {
+  public async confirmConsent(fromUserMicClick: boolean = false): Promise<void> {
+    if (fromUserMicClick) {
+      this.micActivatedByClick = true;
+    }
     this.consent.granted = true;
     this.consent.timestamp = Date.now();
     await this.activateSession();
     this.speechSynthesizer("Tack, nu lyssnar jag på samtalet.");
+  }
+
+  public activateUserMic(): void {
+    this.micActivatedByClick = true;
   }
 
   private async activateSession(): Promise<void> {
@@ -246,12 +266,87 @@ export class LiveListenerService {
     this.logGeminiEvent(`session.ready [Model: ${this.getModel()}]`);
     this.logFunctionCall("update_topic_zones");
 
+    // Initiera och anslut WebSocket till Gemini Live API om API-nyckel finns
+    await this.initLiveWebSocket();
+
     // Starta kameran vid aktivt lyssnande om tillåtet
     if (this.options.enableCamera !== false) {
       await this.cameraManager.start();
       this.notifyCameraStatus();
       this.scheduleNextCameraFrame();
     }
+  }
+
+  private async initLiveWebSocket(): Promise<void> {
+    const key = this.apiKey || resolveGeminiApiKey();
+    if (!key) {
+      this.handleWebSocketError("400", "Saknar API-nyckel (GEMINI_API_KEY saknas i miljö)");
+      return;
+    }
+
+    try {
+      this.closeLiveSession();
+      const ai = new GoogleGenAI({ apiKey: key });
+
+      // Anslut till Gemini Live API via WebSockets
+      const session = await ai.live.connect({
+        model: this.getModel(),
+        config: {
+          responseModalities: ["audio"],
+          systemInstruction: {
+            parts: [{ text: this.getTemporalInstructionFragment() }],
+          },
+        },
+        callbacks: {
+          onopen: () => {
+            this.logGeminiEvent("websocket.open [Gemini Live Ansluten]");
+          },
+          onmessage: (response: any) => {
+            if (response?.serverContent?.modelTurn?.parts) {
+              for (const part of response.serverContent.modelTurn.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                  this.handleIncomingModelAudio(part.inlineData.data);
+                }
+              }
+            }
+            if (response?.serverContent?.interrupted) {
+              this.handleIncomingInterruption();
+            }
+          },
+          onerror: (err: any) => {
+            const errCode = err?.code || err?.status || err?.statusCode || "400";
+            const errMsg = err?.message || err?.statusText || "Invalid API Key or Model / Connection Failed";
+            this.handleWebSocketError(errCode, errMsg);
+          },
+          onclose: (closeEvt: any) => {
+            const code = closeEvt?.code ?? 1006;
+            const reason = closeEvt?.reason || "Abnormal Closure / Connection Terminated";
+            // Rapportera endast om användaren fortfarande har mikrofonen aktiverad
+            if (this.status === "listening" || this.micActivatedByClick) {
+              this.handleWebSocketClose(code, reason);
+            }
+          },
+        },
+      });
+
+      this.liveSession = session;
+    } catch (err: any) {
+      const errCode = err?.status || err?.code || "400";
+      const errMsg = err?.message || "Invalid API Key or Model / Connect Failed";
+      this.handleWebSocketError(errCode, errMsg);
+    }
+  }
+
+  public handleWebSocketError(code: string | number, message: string): void {
+    const formatted = `WS ERROR: ${code} - ${message}`;
+    console.error(formatted);
+    this.updateDiagnosticStatus(formatted);
+  }
+
+  public handleWebSocketClose(code: string | number, reason: string): void {
+    const formatted = `WS CLOSED: ${code} - ${reason}`;
+    console.warn(formatted);
+    this.updateDiagnosticStatus(formatted);
   }
 
   public pauseListening(): void {
@@ -271,10 +366,12 @@ export class LiveListenerService {
   }
 
   public stopListening(): void {
+    this.micActivatedByClick = false;
     this.status = "idle";
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
     this.stopCameraAndTimers();
+    this.closeLiveSession();
     this.pcmPlayer.interrupt();
     if (this.options.onActiveSpeakerChange) {
       this.options.onActiveSpeakerChange(null);
@@ -282,12 +379,27 @@ export class LiveListenerService {
   }
 
   public resetConsent(): void {
+    this.micActivatedByClick = false;
     this.consent = { requested: false, granted: false };
     this.status = "idle";
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
     this.stopCameraAndTimers();
+    this.closeLiveSession();
     this.pcmPlayer.interrupt();
+  }
+
+  private closeLiveSession(): void {
+    if (this.liveSession) {
+      try {
+        if (typeof this.liveSession.close === "function") {
+          this.liveSession.close();
+        }
+      } catch (err) {
+        console.error("Error closing live session:", err);
+      }
+      this.liveSession = null;
+    }
   }
 
   private stopCameraAndTimers(): void {
@@ -361,6 +473,11 @@ export class LiveListenerService {
   }
 
   public simulateUtterance(speakerId: SpeakerId, text: string): LiveUtteranceEvent | null {
+    // Om användaren har tryckt på mikrofonknappen är mock-ordboken helt avstängd (Hard Fail)
+    if (this.micActivatedByClick) {
+      return null;
+    }
+
     if (this.status !== "listening") {
       return null;
     }

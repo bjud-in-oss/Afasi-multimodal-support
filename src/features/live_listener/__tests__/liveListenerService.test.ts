@@ -157,5 +157,44 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
     expect(fragment).toContain("AKTUELL LOKAL TID");
     expect(fragment).toContain("Dygnsfas");
   });
+
+  describe("Diagnos & Hard Fail för Gemini Live WebSocket (TCK-006D)", () => {
+    it("visar WebSocket-felkoder i lastEventStatus vid fel", () => {
+      service.handleWebSocketError("400", "Invalid API Key or Model");
+      expect(service.getLastEventStatus()).toBe("WS ERROR: 400 - Invalid API Key or Model");
+
+      service.handleWebSocketError(403, "Permission Denied");
+      expect(service.getLastEventStatus()).toBe("WS ERROR: 403 - Permission Denied");
+    });
+
+    it("visar WebSocket-stängningskod i lastEventStatus vid onclose", () => {
+      service.handleWebSocketClose(1006, "Abnormal Closure / Connection Terminated");
+      expect(service.getLastEventStatus()).toBe("WS CLOSED: 1006 - Abnormal Closure / Connection Terminated");
+    });
+
+    it("stänger av simulateUtterance helt (Hard Fail) när användaren aktiverat mikrofonen", () => {
+      service.startListening(true);
+      service.confirmConsent(true);
+
+      // Mikrofonen är nu aktiverad av klick/användaren (micActivatedByClick = true)
+      expect(service.getStatus()).toBe("listening");
+      expect(service.isMicActivatedByClick()).toBe(true);
+
+      // simulateUtterance ska returnera null och inte producera några brickor
+      const result = service.simulateUtterance("speaker-1", "Kaffe och kaka");
+      expect(result).toBeNull();
+      expect(emittedUtterances.length).toBe(0);
+
+      // När användaren stänger av mikrofonen återställs flaggan
+      service.stopListening();
+      expect(service.isMicActivatedByClick()).toBe(false);
+
+      // Om status sätts direkt (t.ex. i isolerat test utan mic-klick) fungerar ordboken igen
+      service.setStatus("listening");
+      const testMockResult = service.simulateUtterance("speaker-1", "Kaffe");
+      expect(testMockResult).not.toBeNull();
+      expect(emittedUtterances.length).toBe(1);
+    });
+  });
 });
 

@@ -27,14 +27,14 @@ export function useLiveListener(onUtterance?: (event: LiveUtteranceEvent) => voi
 
   const service = serviceRef.current;
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (fromUserMicClick: boolean = true) => {
     await service.resumeAudio();
-    await service.startListening();
+    await service.startListening(fromUserMicClick);
   }, [service]);
 
-  const confirmConsent = useCallback(async () => {
+  const confirmConsent = useCallback(async (fromUserMicClick: boolean = true) => {
     await service.resumeAudio();
-    await service.confirmConsent();
+    await service.confirmConsent(fromUserMicClick);
   }, [service]);
 
   const pauseListening = useCallback(() => {

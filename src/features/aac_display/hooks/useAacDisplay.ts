@@ -469,8 +469,8 @@ export function useAacDisplay() {
       const nextListening = !prev.isListening;
       if (nextListening) {
         setListenerStatus("connecting");
-        defaultLiveListener.startListening();
-        defaultLiveListener.confirmConsent();
+        defaultLiveListener.startListening(true);
+        defaultLiveListener.confirmConsent(true);
         setTimeout(() => {
           setListenerStatus("listening");
         }, 350);
