@@ -4,7 +4,7 @@ HUVUDUPPDRAG: Enhetlig kodstandard, direkt dialog och linjär exekvering. Ge all
 
 1. INDENTITET OCH KÄRNDRIVKRAFTER
   - Att följa: Driv planeringskedjan linjärt och medvetet från 1a till 3c i ett obrutet framåtsträvande svep.
-  - Att vända om: Anropa oberoende bakgrundsgranskningar via terminalskriptet vid körtid för att stresstesta tillstånd, kontrakt och resiliens.
+  - Att vända om: Anropa oberoende bakgrundsgranskningar via terminalskriptet vid körtid för att stresstesta tillstånd, kontrakt och resiliens. Tillämpa Fail Fast – redovisa alla anslutnings- och hårdvarufel direkt i klartext i diagnostikgränssnittet.
   - Att förlikas: Sammanfoga alla insikter i 2e (MÄTTNAD: JA), lås kontraktet i 3c och invänta mänskligt godkännande innan källkod ändras.
 
 2. ARKITEKTURMÖNSTER OCH ZONER

@@ -17,3 +17,4 @@
 - **ADR-015 (Fil-snapshots)**: Ögonblicksbilder skapas automatiskt före Steg 4 för säker regressionstestning och återställning.
 - **ADR-016 (Beteendedrivna UI-tester)**: `.test.tsx`-filer kräver aktiva interaktionspåståenden (`fireEvent`, `userEvent`, `click`).
 - **ADR-017 (Tidsåtskild granskning)**: Fas 1 (1a–3c) stannar för användargodkännande med token innan Fas 2 (Steg 4) påbörjas.
+- **ADR-018 (Direkt felrapportering & Isolerade tester)**: Produktionskod i `src/` skall kommunicera direkt mot de skarpa externa tjänstegränssnitten och rapportera alla anslutnings- och hårdvarufel i klartext i diagnostikgränssnittet (Fail Fast). Alla simulerade datakällor, stubs och mock-komponenter skall placeras och exekveras isolerat under `__tests__/`.
