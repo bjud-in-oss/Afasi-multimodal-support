@@ -39,16 +39,6 @@ export function AacTileItem({
   const needsClarification = tile.confidence >= 0.5 && tile.confidence < 0.8;
 
   const renderIcon = () => {
-    if (tile.customSvg) {
-      return (
-        <div
-          data-testid={`custom-svg-${tile.id}`}
-          className="w-14 h-14 flex items-center justify-center text-stone-800 [&>svg]:w-full [&>svg]:h-full"
-          dangerouslySetInnerHTML={{ __html: tile.customSvg }}
-        />
-      );
-    }
-
     const props = { className: "w-12 h-12 stroke-[1.75]" };
     switch (tile.iconKey) {
       case "coffee":
@@ -126,14 +116,6 @@ export function AacTileItem({
         >
           <Check className="w-3.5 h-3.5 stroke-[2.5]" />
         </button>
-      )}
-
-      {/* Kamerasyn-indikator om brickan berikats från rummets visuella kontext */}
-      {tile.enrichmentStage === "camera_enriched" && (
-        <div
-          data-testid={`camera-enriched-indicator-${tile.id}`}
-          className="pointer-events-none absolute bottom-2 left-2 z-10 w-2.5 h-2.5 rounded-full bg-sky-500 ring-2 ring-white shadow-xs animate-pulse"
-        />
       )}
 
       {/* Frågetecken-överlägg vid medelhög konfidens (0.50 - 0.79) */}

@@ -1,6 +1,7 @@
-# Steg 2b: Evaluera yttre anpassning (Cykel 5 - TCK-006)
+# Steg 2b: Evaluera yttre anpassning (Cykel 6 - TCK-006C)
 
 ## 1. Yttre utvärdering & gränssnittstest
-- **WCAG AA-kontroll**: Temafärgerna (`violet`, `rose`, etc.) använder dämpade bakgrunder (`bg-violet-500/10`, `border-violet-500/30`, `text-violet-900/text-violet-100`) vilket ger god kontrast mot både ljusa och mörka bakgrunder utan skrikiga neonfärger.
-- **Responsiv layout**: Skärmen fördelas adaptivt i 1, 2 eller 2x2 rutnät, vilket bevarar minst 44px (ofta 56–72px) touchytor för varje symbolbricka även vid 4 aktiva zoner.
-- **Kognitiv säkerhet**: Textlös princip bevaras till 100 %. Talarens identitet är rent visuell/spatial och färgkodad.
+- **Integritets- och tillståndsvalidering**: När användaren trycker på mikrofonsymbolen för att stoppa eller pausa lyssnandet garanterar `CameraManager` att `MediaStream.getTracks().forEach(track => track.stop())` exekveras synkront. Webbläsarens kamera- och mikrofonindikatorer släcks omedelbart.
+- **Akustisk och kognitiv säkerhet**: Geminis genererade PCM16-tal ersätter webbläsarens syntetiska robotröst. Ljudet är naturligt, lugnt och avbrytbart. Vid minsta avbrott från användaren eller motparten tystnar Gemini direkt via `interrupted: true`.
+- **Tidsmässig anpassning**: Tack vare tidsinjicering i sessionskontexten föreslås tidsrelevanta symboler (t.ex. kaffe och smörgås på förmiddagen, promenad på eftermiddagen, vila och medicin på kvällen).
+- **Bakåtkompatibilitet och fallback**: Om WebSocket eller Gemini API-nyckel saknas i test- eller offline-miljö bibehålls deterministisk ordboksbaserad simulering så att användargränssnittet och testerna aldrig kraschar.

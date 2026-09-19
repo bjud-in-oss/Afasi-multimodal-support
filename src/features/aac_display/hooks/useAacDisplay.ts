@@ -198,6 +198,21 @@ export function useAacDisplay() {
     return "disconnected";
   })();
 
+  // Talsyntesfunktion
+  const speakText = useCallback((text: string) => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "sv-SE";
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // Fallback om röst inte är tillgänglig i miljö
+      }
+    }
+  }, []);
+
   // Välj scenbricka (Fika, Handla, Hälsa, Vila/Hem)
   const selectScenario = useCallback((scenarioKey: "coffee" | "cart" | "heart" | "home") => {
     if (scenarioKey === "home") {
@@ -232,13 +247,13 @@ export function useAacDisplay() {
     }
   }, []);
 
-  // Välj en bildbricka och skicka textinput till Gemini Live (ersätter lokal TTS)
+  // Välj en bildbricka
   const handleSelectTile = useCallback((tile: AacTile) => {
     setSelectedTile(tile);
     setFeedbackStatus(null);
     setState((prev) => ({ ...prev, lastSpokenText: tile.speechText }));
-    defaultLiveListener.sendTextInput(tile.speechText);
-  }, []);
+    speakText(tile.speechText);
+  }, [speakText]);
 
   // Bekräfta gissning (Grön bock)
   const handleConfirm = useCallback(() => {
@@ -273,8 +288,8 @@ export function useAacDisplay() {
       })),
     }));
 
-    defaultLiveListener.sendTextInput("Ja, precis så.");
-  }, [selectedTile, state.activeScenarioId]);
+    speakText("Ja, precis så.");
+  }, [selectedTile, speakText, state.activeScenarioId]);
 
   // Avfärda gissning (Rött kryss)
   const handleReject = useCallback(() => {
@@ -308,11 +323,14 @@ export function useAacDisplay() {
     }));
 
     setSelectedTile(null);
-    defaultLiveListener.sendTextInput("Nej, inte det.");
-  }, [selectedTile, state.activeScenarioId]);
+    speakText("Nej, inte det.");
+  }, [selectedTile, speakText, state.activeScenarioId]);
 
   // Koppla samman liveListener-händelser
   useEffect(() => {
+    const originalSynthesizer = (text: string) => speakText(text);
+    defaultLiveListener.setSpeechSynthesizer(originalSynthesizer);
+
     defaultLiveListener.setOnStatusChange((status) => {
       setListenerStatus(status);
     });
@@ -387,7 +405,7 @@ export function useAacDisplay() {
     return () => {
       unsubDiag();
     };
-  }, []);
+  }, [speakText]);
 
   // Frikopplad mikro-feedback: Tyst avfärdande med automatisk ersättning i realtid
   const handleDismissTileSilent = useCallback(
@@ -465,88 +483,6 @@ export function useAacDisplay() {
     });
   }, []);
 
-  // Dynamiska kontrollbrickor i högerzonen (4 mest relevanta brickorna baserat på tid, kamera, samtal och AdaptiveMemory)
-  const dynamicControlTiles: AacTile[] = (() => {
-    const hour = new Date().getHours();
-    const detected = defaultLiveListener.getDetectedObjects();
-    const activeZoneTiles = state.speakerZones.flatMap((z) => z.tiles);
-
-    // Baskandidater anpassade efter tid på dygnet (morgonfika, lunch, eftermiddag, kvällsmat/vila)
-    let candidates: Array<{
-      iconKey: AacTile["iconKey"];
-      speechText: string;
-      baseConfidence: number;
-    }> = [];
-
-    if (hour >= 6 && hour < 11) {
-      candidates = [
-        { iconKey: "coffee", speechText: "Kaffe och frukost", baseConfidence: 0.95 },
-        { iconKey: "cart", speechText: "Handla", baseConfidence: 0.88 },
-        { iconKey: "heart", speechText: "Hälsa och omtanke", baseConfidence: 0.85 },
-        { iconKey: "home", speechText: "Vara hemma och vila", baseConfidence: 0.82 },
-      ];
-    } else if (hour >= 11 && hour < 14) {
-      candidates = [
-        { iconKey: "cart", speechText: "Handla mat", baseConfidence: 0.95 },
-        { iconKey: "coffee", speechText: "Kaffe efter maten", baseConfidence: 0.9 },
-        { iconKey: "heart", speechText: "Hälsa och vila", baseConfidence: 0.85 },
-        { iconKey: "home", speechText: "Vara hemma", baseConfidence: 0.8 },
-      ];
-    } else if (hour >= 14 && hour < 18) {
-      candidates = [
-        { iconKey: "coffee", speechText: "Eftermiddagsfika", baseConfidence: 0.95 },
-        { iconKey: "cart", speechText: "Handla mat", baseConfidence: 0.9 },
-        { iconKey: "heart", speechText: "Hälsa och vila", baseConfidence: 0.88 },
-        { iconKey: "home", speechText: "Vara hemma och vila", baseConfidence: 0.85 },
-      ];
-    } else {
-      candidates = [
-        { iconKey: "home", speechText: "Vara hemma och vila", baseConfidence: 0.95 },
-        { iconKey: "heart", speechText: "Vila och sova", baseConfidence: 0.9 },
-        { iconKey: "coffee", speechText: "Kvällsfika", baseConfidence: 0.85 },
-        { iconKey: "cart", speechText: "Handla imorgon", baseConfidence: 0.82 },
-      ];
-    }
-
-    const rawTiles: AacTile[] = candidates.map((c) => {
-      let conf = c.baseConfidence;
-      let stage: AacTile["enrichmentStage"] = "standard";
-      let matchedObj: string | undefined = undefined;
-
-      // Berika med kameraobjekt
-      const isDetected = detected.find(
-        (o) =>
-          c.speechText.toLowerCase().includes(o.toLowerCase()) ||
-          c.iconKey.toLowerCase().includes(o.toLowerCase())
-      );
-      if (isDetected) {
-        conf = Math.min(1.0, conf + 0.15);
-        stage = "camera_enriched";
-        matchedObj = isDetected;
-      }
-
-      // Berika med aktiv samtalstråd
-      if (activeZoneTiles.some((t) => t.iconKey === c.iconKey)) {
-        conf = Math.min(1.0, conf + 0.1);
-      }
-
-      return {
-        id: `control-${c.iconKey}`,
-        iconKey: c.iconKey,
-        confidence: conf,
-        isGroundTruth: conf >= 0.8,
-        speechText: c.speechText,
-        enrichmentStage: stage,
-        detectedObject: matchedObj,
-      };
-    });
-
-    const weighted = defaultAdaptiveMemory.applyLearnedWeights("user_control_zone", rawTiles);
-    weighted.sort((a, b) => b.confidence - a.confidence);
-
-    return weighted.slice(0, 4);
-  })();
-
   return {
     state,
     selectedTile,
@@ -560,6 +496,5 @@ export function useAacDisplay() {
     toggleListening,
     connectionStatus,
     lastEventStatus,
-    dynamicControlTiles,
   };
 }

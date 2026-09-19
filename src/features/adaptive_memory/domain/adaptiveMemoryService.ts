@@ -119,10 +119,6 @@ export class AdaptiveMemoryService {
       }
     }
   }
-
-  public reset(): void {
-    this.clearMemory();
-  }
 }
 
 export const defaultAdaptiveMemory = new AdaptiveMemoryService();

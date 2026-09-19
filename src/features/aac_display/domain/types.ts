@@ -7,9 +7,6 @@ export interface AacTile {
   isGroundTruth: boolean;
   speechText: string;
   category?: "food" | "health" | "social" | "need";
-  enrichmentStage?: "standard" | "camera_enriched" | "gemini_drawing";
-  customSvg?: string;
-  detectedObject?: string;
 }
 
 export interface SpeakerZone {

@@ -1,34 +1,33 @@
-# Steg 1b: Kartlägga (Cykel 5 - TCK-006: aac_display)
+# Steg 1b: Kartlägga (Cykel 6 - TCK-006C: live_listener)
 
 ## 1. Besvarande av GROW-frågorna (Arkitektonisk syntes)
 
-### Fråga 1 (Goal & State - Responsiv 2x2 grid-layout för 3+ talare):
-- **1 talare**: Full bredd och balanserad höjd med centrerade, luftiga brickor.
-- **2 talare**: 2 kolumner (desktop/tablet) eller 2 rader (mobil) med jämn fördelning.
-- **3 talare**: Adaptiv 3-zonslayout (antingen 2 kolumner där en zon spänner över eller ett responsivt 3-kolumns/2x2-rutnät) med bibehållen kognitiv balans.
-- **4+ talare**: Balanserad 2x2 grid (`grid-cols-1 md:grid-cols-2`) med optimerad padding och komprimerade men fullt tillgängliga brickdimensioner (minst 56px höjd och touchyta).
+### Fråga 1 (Contract & Options - WebSocket & Gemini 3.8 Live):
+- **Modell & SDK**: Använder officiella `@google/genai` med `ai.live.connect({ model: 'models/gemini-3.8-live', config: ... })` över WebSockets enligt `gemini-live-api-dev`.
+- **Modaliteter**: `responseModalities: ['audio']` för nativ ljud- och röstgenerering.
+- **Tidsmedvetenhet (Temporal Grounding)**: Vid sessionsstart injiceras aktuell lokal tid och tidsram (t.ex. datum, klockslag, dygnstillfälle som morgon/fika/lunch/kväll) i `systemInstruction` samt vid behov via `sendClientContent` vid tidsövergångar. Detta gör att Gemini förstår kontextuella referenser till t.ex. "frukost", "kaffe", "vila" i förhållande till klockan.
+- **Funktionsanrop**: Verktygskonfiguration med `update_topic_zones` (med `behavior: 'NON_BLOCKING'`) som uppdaterar afasi-brickorna kontinuerligt medan samtalet och ljudet strömmar.
 
-### Fråga 2 (Options & Contract - Utökat ColorTheme-kontrakt):
-- Utökar `ColorTheme` i `src/features/aac_display/domain/types.ts` med:
-  - `'violet'` (dämpad lavendel/viol)
-  - `'rose'` (dämpad terrakotta/varm ros)
-- Uppdaterar `themeStyles` i `SpeakerZoneView.tsx` med matchande mjuka bakgrunder, borders och subtila indikatorer som uppfyller WCAG AA och bevarar ett textlöst, harmoniskt visuellt lugn.
+### Fråga 2 (State & Resilience - En kontrollerad kamerainstans):
+- **Exklusiv instanshantering**: Skapa en dedikerad `CameraStreamController` med intern referens och singleton-semantik.
+- **Livscykelkoppling**: Kameran startas endast när användaren har gett samtycke och aktiverat lyssnandet.
+- **Säker nedstängning**: När mikrofonen/lyssnandet stängs av (`stopListening` eller `pauseListening`) anropas `cameraController.stop()` som omedelbart anropar `track.stop()` på samtliga aktiva spår i `MediaStream`, sätter strömmen till `null` och frigör eventuell `<video>`/`<canvas>`-resurs. Detta släpper webbkameran och säkerställer att hårdvaruindikatorn släcks.
+- **Bildströmning**: Bildrutor tas som komprimerade JPEG-frames i måttlig frekvens (t.ex. 1 fps eller vid talarväxling) och skickas via `session.sendRealtimeInput({ video: { data: base64, mimeType: 'image/jpeg' } })`.
 
-### Fråga 3 (Way Forward & Effects/Resilience - Dämpad aktivitetspuls):
-- Snabba talarväxlingar hanteras med mjuk `transition-all duration-500 ease-out`.
-- Aktiv talare framhävs via en dämpad yttre ring (`ring-2 ring-opacity-60`) och lätt upphöjd ton, utan flimrande eller abrupta kontrastskiften som kan skapa kognitiv trötthet.
+### Fråga 3 (Effects & Way Forward - Inkommande PCM16-ljud & Avbrott):
+- **Utmönstring av talsyntes**: Lokal `window.speechSynthesis` avlägsnas helt som ljudkälla för Geminis yttranden.
+- **PCM16 24kHz avspelning**: Inkommande ljudpaket (`serverContent.modelTurn.parts` med `inlineData`) avkodas från base64 till 16-bitars PCM little-endian (Int16Array) och konverteras till 32-bitars float för avspelning via Web Audio API `AudioContext` vid 24000 Hz samplingsfrekvens.
+- **Avbrottshantering (Barge-in / Interruption)**: När servern skickar `serverContent.interrupted === true` töms ljudkön omedelbart och pågående ljudkällor termineras (`source.stop()`), vilket ger omedelbar tystnad när samtalspartnern börjar tala igen.
 
 ---
 
 ## 2. Vektoranalys & Risknoder
-- **`State`**: Responsiv zon-distribution vid $N \in [1, 6]$ talare.
-- **`Contract`**: `ColorTheme` uppdaterad med bakåtkompatibilitet.
-- **`Effects`**: Skonsam visuell prioritering av aktiv talare.
+- **`Resilience`**: Hårdvaruresurser (kamera + mikrofon) och nätverksresiliens (WebSocket reconnection & timeout handling).
 
 ```json
 {
-  "active_vectors": ["State", "Contract"],
-  "vector_count": 2,
+  "active_vectors": ["Resilience"],
+  "vector_count": 1,
   "execution_mode": "linear",
   "status": "COMPLETED",
   "next_step": "2a_forandra_utat_vision"

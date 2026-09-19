@@ -1,21 +1,16 @@
-# Steg 2a: Förändra utåt (Vision & Yttre Arkitektur) - TCK-006
+# Steg 2a: Förändra utåt (Vision & Yttre Arkitektur) - TCK-006C
 
-## 1. Vision för flertalar-upplevelsen i afasigränssnittet
-Ett flerpersonssamtal i en familj eller ett möte kan vara överväldigande för en person med afasi om gränssnittet blir trångt eller stroboskopiskt.
-Genom adaptiv 2x2 bento/grid-skalning och färgkodade lugna teman ges användaren:
-1. **Omedelbar rumslig orientering**: Varje person i rummet har en fast, dedikerad talarzon med ett personligt färg-DNA (`amber`, `emerald`, `sky`, `slate`, `violet`, `rose`).
-2. **Kognitiv symmetri**: Oavsett om det är 1, 2, 3 eller 4 personer som talar, anpassas zonernas storlek automatiskt utan att användaren tappar överblicken eller behöver rulla.
-3. **Mjuk fokusindikator**: Den som pratar för stunden indikeras med en mild, andande ring utan att de andra zonerna slocknar eller ändrar layout.
+## 1. Vision för äkta multimodal Gemini Live i afasigränssnittet
+Målet med TCK-006C är att transformera prototypen från en simulerad/hybrid talsyntes till en äkta, levande samtalsassistent som ser, hör och talar med naturlig mänsklig närvaro:
+1. **Äkta Gemini 3.8 Live Röst**: Istället för mekanisk robotröst från webbläsaren genererar Gemini nativt talande ljud med PCM16 24kHz-kvalitet. Svaren har naturlig intonation, värme och omedelbar responsivitet.
+2. **Visuell Kameranärvaro**: Med en kontrollerad kamera ser modellen omgivningen (t.ex. om det står en kaffekopp på bordet, om någon vinkar, eller om det är ljust/mörkt i rummet), vilket drastiskt ökar relevansen i symbolförslagen utan att användaren behöver förklara med ord.
+3. **Respektfull Resurshantering & Integritet**: Webbkameran ska *aldrig* förbli påslagen i smyg. Endast en instans tillåts, och så fort mikrofonen stängs av bryts även kamerans videoström fullständigt och indikatorn släcks.
+4. **Tidsmedvetenhet i Nuet**: Genom att kontinuerligt känna till aktuell tid kan assistenten skilja på förmiddagens kaffepaus och kvällens vila, vilket ger kognitivt träffsäkra symboler i rätt sammanhang.
 
 ## 2. Arkitektoniska gränssnittsförändringar
-- **`src/features/aac_display/domain/types.ts`**:
-  ```ts
-  export type ColorTheme = 'amber' | 'emerald' | 'sky' | 'slate' | 'violet' | 'rose';
-  ```
-- **`src/features/aac_display/components/SpeakerZoneView.tsx`**:
-  Utöka temamappningen med `violet` och `rose` samt tillämpa dämpad transition-ring.
-- **`src/features/aac_display/components/AacDisplay.tsx`**:
-  Dynamisk grid-beräkning baserat på `speakerZones.length`:
-  - $N = 1$: `grid-cols-1`
-  - $N = 2$: `grid-cols-1 md:grid-cols-2`
-  - $N \ge 3$: `grid-cols-1 md:grid-cols-2 lg:grid-cols-2` (eller 3-spalt vid bred bildskärm).
+- **`src/features/live_listener/domain/`**:
+  - `geminiLiveConnection.ts` / `LiveListenerService`: Hanterar WebSockets till `models/gemini-3.8-live` via `@google/genai`.
+  - `cameraManager.ts`: Singleton-kontroller för `getUserMedia` med strikt `stop()`-metod som itererar över `stream.getTracks().forEach(t => t.stop())` och nollställer referensen.
+  - `pcmPlayer.ts`: Web Audio API `AudioContext` spelare för 24kHz PCM16 med `interrupt()`-funktion.
+- **`src/features/live_listener/hooks/useLiveListener.ts`**:
+  - Exponerar styrning av mikrofon och kamera i synk samt statusindikatorer för aktiv WebSocket- och kameraström.
