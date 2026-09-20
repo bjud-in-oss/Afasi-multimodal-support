@@ -1,37 +1,48 @@
-# Steg 1a: Orientera (Cykel 8 - TCK-008B: Direkta klick & Gemini 3.8 Live-protokoll)
+# Steg 1a: Orientera (Cykel 9 - TCK-010-011: Dynamisk AAC-yta & Gemini Live Protokoll)
 
 ## 1. Problembeskrivning & Målbild
-Uppdatera och anpassa samtalslyssnaren i `liveListenerService.ts` enligt de officiella protokollkraven i `gemini-live-api-dev/SKILL.md` och ADR-018:
+Implementera den fullständiga specifikationen i `doc/AAC_COGNITIVE_RULES.md` och koppla samman den kognitiva rullningsfria AAC-ytan med Gemini Live API-protokollet:
 
-1. **Manuellt klick som aktivt samtycke**:
-   - När användaren klickar på mikrofonknappen (`startListening` / `confirmConsent`) utgör själva handlingen ett aktivt samtycke.
-   - Sätt `consent.granted = true` och anropa `activateSession()` direkt utan fördröjande röstmeddelande eller syntetiska väntelägen.
-   - Uppdatera Regel 1 i `src/features/live_listener/doc/BUSINESS_RULES.md` så att dokumentationen återspeglar att manuellt klick utgör giltigt samtycke.
+1. **Rullningsfri & Elastisk Yta (`[RULE-003]`)**:
+   - `AacDisplay.tsx`: Lås rotytan till `h-screen max-h-screen overflow-hidden w-full bg-stone-100 flex flex-col lg:flex-row gap-5 p-4 select-none`.
+   - `UserControlZone.tsx` och `SpeakerZoneView.tsx`: Sätt `h-full min-h-0 flex-col` för att eliminera rullningslister och ge elastisk skalning.
+   - `AacTileItem.tsx`: Förstora symbolikoner till flexibel fyllnad (`w-20 h-20` / `w-24 h-24`).
+   - Radera de statiska övningsknapparna (Fika, Handla, Hälsa) så att alla kategorier och samtalszoner byggs 100 % dynamiskt av AI-agenten (`[SYSTEM-005]`).
 
-2. **Garantera skarp hantering enligt Gemini 3.8 Live-protokollet (`SKILL.md`)**:
-   - **Asynkront verktygsanrop**: Deklarera verktyget `update_topic_zones` med `behavior: "NON_BLOCKING"` så att Gemini kan utföra asynkrona verktygsanrop i bakgrunden utan att röst- och bildströmmen avbryts.
-   - **Transkriptionskonfiguration**: Konfigurera `inputAudioTranscription: {}` och `outputAudioTranscription: {}` i `LiveConnectConfig` för att ta emot skarpa texttranskriptioner (`serverContent.inputTranscription?.text` och `serverContent.outputTranscription?.text`) direkt över WebSocket.
-   - **Textimpulser via realtime-input**: Skicka alla användarinteraktioner och textimpulser via `sendRealtimeInput({ text: ... })` i enlighet med `SKILL.md` (undvik `sendClientContent` med `turnComplete: true` som orsakar oönskade avbrott i modellens aktiva talström).
-   - **Reaktiva AAC-brickor & Avduplicering**: När Gemini skickar transkriberad text (`inputTranscription` / `outputTranscription` / `modelTurn.parts`) skall relevanta AAC-brickor genereras och visas på skärmen i realtid. Avduplicering implementeras mellan transkriptionshanteraren och `handleIncomingFunctionCall` (`update_topic_zones`) så att samma begrepp inte skapar dubblerade brickor. All ordtolkning skall härledas uteslutande från Geminis skarpa dataström (ADR-018).
+2. **Sticky Floor & Laptop-projektion (`[RULE-001]`, `[RULE-009]`, `[RULE-016]`)**:
+   - Vid beröring (`onTouchStart`, `onPointerDown`, `touchMove`, drag) pausas alla inkommande bakgrundsuppdateringar (`update_topic_zones`).
+   - Starta en 5000 ms Grace Period-timer vid `onTouchEnd`/`onPointerUp`. Ny beröring nollställer timern.
+   - Ett klick på `[Rensa]` nollställer budskapsraden och avbryter Grace Period omedelbart.
+   - En 30-sekunders hard timeout återupptar bakgrundsuppdateringar vid oavbruten beröring.
+   - Skicka status till den delade laptopen som visar pulserande ram med texten `"Kalle tänker... vänta."`.
 
-3. **Tydlig felrapportering vid saknad nyckel (Fail Fast / ADR-018)**:
-   - Om varken `VITE_GEMINI_API_KEY` eller `process.env.GEMINI_API_KEY` identifieras vid start skall diagnostikraden omedelbart visa `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` i klartext via `updateDiagnosticStatus`.
+3. **Gemini Live 3.8 Silent Observer & Protokoll (`[RULE-002]`, `[SYSTEM-001]`, `[SYSTEM-009]`)**:
+   - Aktivt samtycke via klick på mikrofonknappen (`consent.granted = true`) och direkt `activateSession()` utan verbal hälsning.
+   - `systemInstruction`: Exakt fastställd instruktion för tyst kognitiv observatör som inte pratar högt under lyssning, inte transkriberar ordagrant utan destillerar till 2–3 visuella kärnkoncept, ankrar monologer >30s och hanterar symmetrisk talardiarisering.
+   - Verktygsdeklaration: `update_topic_zones` med `behavior: "NON_BLOCKING"`, parametrar för `participantId`, `colorZone`, `behavior` och `tiles` (max 2–5 koncept).
+   - `LiveConnectConfig`: `inputAudioTranscription: {}` (16kHz PCM in), `outputAudioTranscription: {}` (24kHz PCM ut).
+   - Textimpulser: Skickas uteslutande via `sendRealtimeInput({ text: ... })` enligt `SKILL.md`.
+
+4. **Fail-Fast Diagnostik & 60s RAM-recorder (`[ADR-018]`, `[SYSTEM-004]`)**:
+   - Om API-nyckel saknas visas `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` i klartext i diagnostikraden.
+   - `diagnosticRecorder.ts`: Underhåller en 60s rullande RAM-buffert bestående av tidsstämplade `events.json` (med time-awareness och funktionsanrop), skärmström (`getDisplayMedia`), kameraström (`getUserMedia`) och kombinerat PCM-ljud.
+   - Knappen `[Ladda ned Felsöknings-ZIP]` i den dolda diagnostikpanelen (`UserControlZone.tsx`) laddar ned `diagnostics_60s.zip`.
 
 ## 2. Inblandade domäner
-- `src/features/live_listener/` (`domain/liveListenerService.ts`, `__tests__/liveListenerService.test.ts`, `doc/BUSINESS_RULES.md`)
-- `src/features/aac_display/` (Diagnostikrad och presentation av reaktiva AAC-brickor i zoner)
+- `src/features/aac_display/` (Komponenter: `AacDisplay.tsx`, `UserControlZone.tsx`, `SpeakerZoneView.tsx`, `AacTileItem.tsx`, hooks & affärsregler)
+- `src/features/live_listener/` (Tjänst: `liveListenerService.ts`, `diagnosticRecorder.ts`, typer & affärsregler)
 
 ## 3. Tre fokuserade GROW-frågor mot faktiska risknoder
-1. **State & Contract (Manuellt klick & sessionstillstånd)**: Hur garanteras att användarens manuella klick på mikrofonknappen direkt sätter `consent.granted = true` och aktiverar sessionen utan att introducera tillståndskonflikter, dolda talsynteser eller asynkrona kapplöpningar?
-2. **Contract & Effects (Gemini 3.8 Live-protokoll & non-blocking tools)**: Hur konfigureras `LiveConnectConfig` med `behavior: "NON_BLOCKING"`, `inputAudioTranscription` och `outputAudioTranscription`, samt hur säkerställs att `sendRealtimeInput({ text: ... })` används istället för `sendClientContent` för att förhindra avbrutet modell-tal?
-3. **Resilience & Fail Fast (Avduplicering & API-nyckeldiagnostik)**: Hur designas den gemensamma avdupliceraren för transkription och `update_topic_zones` så att samma begrepp aldrig renderas två gånger, och hur säkerställs att `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` omedelbart syns i diagnostikraden vid start om nyckel saknas?
+1. **State & Layout (Sticky Floor & Rullningsfrihet)**: Hur implementeras Sticky Floor (5000ms grace period, 30s hard timeout, tidig release vid Rensa) och rullningsfri CSS (`h-screen overflow-hidden select-none`, `h-full min-h-0 flex-col`, ikoner `w-20`/`w-24`) utan att bryta befintliga gesture handlers eller ge layout-jitter?
+2. **Contract & Behavior (Gemini Live Silent Observer & NON_BLOCKING)**: Hur konfigureras `liveListenerService.ts` med den exakta Cognitive Observer `systemInstruction`, `behavior: "NON_BLOCKING"` på `update_topic_zones`, `sendRealtimeInput({ text })` och dubbel transkription utan att modellen genererar oönskat tal i rummet?
+3. **Resilience & Diagnostics (Fail Fast & 60s RAM Recorder)**: Hur byggs `diagnosticRecorder.ts` med 60 sekunders cirkulär buffert i minnet (events.json, display, kamera, PCM-ljud) och ZIP-paketering till `diagnostics_60s.zip`, och hur garanteras att `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` omedelbart syns i diagnostikraden vid start om nyckel saknas?
 
 ```json
 {
   "status": "IN_PROGRESS",
-  "current_domain": "live_listener",
+  "current_domain": "aac_display",
   "next_step": "1b_kartlagga",
-  "ticket_id": "TCK-008B",
+  "ticket_id": "TCK-010",
   "active_skill": "gemini-live-api-dev"
 }
 ```

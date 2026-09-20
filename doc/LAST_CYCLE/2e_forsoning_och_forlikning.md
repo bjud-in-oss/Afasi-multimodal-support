@@ -1,10 +1,10 @@
-# Steg 2e: Försoning och förlikning (Cykel 8 - TCK-008B)
+# Steg 2e: Försoning och förlikning (Cykel 9 - TCK-010-011)
 
-## 1. Försoning av målkonflikter och protokollkrav
-- **Integritet vs. Omedelbar tillgänglighet**: Konflikten mellan att inte tjuvlyssna och att ge snabb respons löses harmoniskt genom att användarens manuella klick på mikrofonknappen definieras som aktivt samtycke i Affärsregel 1.
-- **Multimodal strömning vs. Verktygsanrop**: Genom att konfigurera verktyget med `behavior: "NON_BLOCKING"` enligt `SKILL.md` kan Gemini 3.8 Live köra asynkrona verktygsanrop i bakgrunden utan att PCM-ljud eller video hackar eller bryts.
-- **Transkribering vs. Funktionsanrop (Dubletter)**: Transkriptionsströmmen (`inputAudioTranscription` / `outputAudioTranscription`) och funktionsanropet (`update_topic_zones`) avdupliceras via en gemensam metod med en rullande 4s-cache.
-- **Injektion av textimpulser**: Text skickas uteslutande via `sendRealtimeInput({ text: ... })` vilket förhindrar de oönskade modellavbrott som `sendClientContent` med `turnComplete: true` annars orsakar.
-- **Klartextdiagnostik**: Meddelandet `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` är fastlagt.
+## 1. Försoning av målkonflikter och kognitiva krav
+- **Dynamisk AI-strömning vs. Kognitiv stabilitet**: Löst genom `[RULE-001: STICKY_FLOOR]`. Agenten kan arbeta i realtid i bakgrunden, men UI-buffringen pausas så fort användaren rör skärmen och förblir pausad i 5000 ms.
+- **Röstassistans vs. Tyst rumsmiljö**: Löst genom `[RULE-002: OBSERVER_AGENT]` och `[SYSTEM-009]`. Gemini Live håller 100 % tyst under lyssning och skickar endast `update_topic_zones` med `behavior: "NON_BLOCKING"`. Endast vid explicit klick på `GreenCheckButton` aktiveras uppläsning i rummet.
+- **Statiska scenknappar vs. Helhetsdynamik**: Statiska knappar för Fika, Handla, Hälsa avlägsnas (`[SYSTEM-005]`), vilket frigör yta för elastiska kontroller och 100 % dynamiskt genererade samtalsämnen.
+- **Fail-Fast i diagnostik vs. Graceful Degradation i UI**: Löst enligt `[ADR-018]`. Slutanvändarens yta fryser lugnt vid fel utan felkoder, medan diagnostikraden omedelbart visar `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` i klartext för handledaren.
+- **Minneskonsumtion vs. Djupfelsökning**: Löst med en cirkulär 60-sekunders RAM-buffert i `diagnosticRecorder.ts` som laddas ned på begäran som `diagnostics_60s.zip`.
 
 MÄTTNAD: JA

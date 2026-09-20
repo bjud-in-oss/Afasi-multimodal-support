@@ -1,18 +1,24 @@
-# Steg 2a: Förändra utåt - Vision & Arkitektonisk anpassning (Cykel 8 - TCK-008B)
+# Steg 2a: Förändra utåt - Vision & Arkitektonisk anpassning (Cykel 9 - TCK-010-011)
 
-## 1. Yttre vision & Arkitektonisk anpassning
-Den yttre upplevelsen anpassas till en professionell, modern AAC-upplevelse driven av **Gemini 3.8 Live API** och **ADR-018** (Fail Fast & No Mock Infrastructure):
+## 1. Yttre vision & Kognitiv upplevelse
+Den yttre upplevelsen formas efter de kanoniska reglerna i `doc/AAC_COGNITIVE_RULES.md`:
 
-1. **Omedelbar respons vid användarklick**:
-   - Användaren klickar på mikrofonikonen för att starta samtalslyssningen. Handlingen fungerar som ett aktivt samtycke.
-   - Mikrofonströmmen (16kHz PCM16-mono) startas och WebSocket-anslutningen etableras utan fördröjande röstmeddelanden eller syntetiska avbrott.
-   - Affärsregel 1 i `src/features/live_listener/doc/BUSINESS_RULES.md` definierar formellt manuellt klick som giltigt aktivt samtycke.
+1. **Rullningsfri och visuell ro (`[RULE-003]`)**:
+   - Skärmen är helt befriad från rullningslister (`h-screen max-h-screen overflow-hidden select-none`). Inga element rullar bortom synfältet.
+   - Ikoner fyller brickorna med hög synlighet och storlek (`w-20` / `w-24`).
+   - Statiska testknappar har städats bort (`[SYSTEM-005]`); alla samtalsämnen genereras dynamiskt av AI:n i harmoni med stunden.
 
-2. **Gemini 3.8 Live-protokoll & Icke-blockerande verktygsanrop (`SKILL.md`)**:
-   - Verktyget `update_topic_zones` deklareras med `behavior: "NON_BLOCKING"`, vilket tillåter Gemini att köra bakgrundsfunktionsanrop samtidigt som den talar eller tar emot ljud.
-   - `inputAudioTranscription` och `outputAudioTranscription` aktiveras så att taltranskriptioner strömmas i realtid.
-   - Textinteraktioner skickas med `sendRealtimeInput({ text: ... })` i stället för `sendClientContent`, vilket bevarar modellens kontinuerliga tal utan ovälkomna avbrott.
-   - All symbolpresentation sker reaktivt från Geminis skarpa dataström. En avdupliceringsspärr säkerställer att inte samma symbol ritas upp dubbelt om Gemini skickar både transkriberad text och funktionsanrop.
+2. **Skyddat arbetsminne via Sticky Floor (`[RULE-001]`)**:
+   - När användaren vidrör skärmen pausas alla inkommande bildförändringar så att brukaren inte tappar sitt fokus.
+   - En 5-sekunders tidsfrist (Grace Period) ges efter avslutad beröring.
+   - Den delade laptopen visar en pulserande ram runt deltagarens profil med texten `"Kalle tänker... vänta."` så att övriga deltagare i rummet vet att ett inlägg förbereds.
+   - Ett tryck på `[Rensa]` släpper ordet fritt direkt, och en 30s säkerhetstimer förhindrar låsning vid oavsiktlig beröring.
 
-3. **Tydlig diagnostik vid saknad API-nyckel**:
-   - Saknas API-nyckel i miljövariablerna visas `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` omedelbart i diagnostikraden. Inga dolda fallbacks maskerar bristande konfiguration.
+3. **Tyst kognitiv observatör i rummet (`[RULE-002]`, `[SYSTEM-009]`)**:
+   - Gemini Live iakttar samtalet tyst utan att bryta in med verbalt tal.
+   - Den destillerar samtalets kärna till 2–3 visuella symboler och anropar icke-blockerande verktyget `update_topic_zones` (`behavior: "NON_BLOCKING"`).
+   - Offentligt tal i rummet sker uteslutande när användaren godkänner meningen med den gröna bocken (`GreenCheckButton`).
+
+4. **Klartextdiagnostik och 60-sekunders RAM-recorder (`[ADR-018]`, `[SYSTEM-004]`)**:
+   - Om API-nyckel saknas visas `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` direkt i diagnostikraden.
+   - En rullande 60-sekunders inspelningsbuffert kan laddas ned som `diagnostics_60s.zip` via den dolda diagnostikpanelen.

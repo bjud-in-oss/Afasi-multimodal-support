@@ -1,23 +1,38 @@
-# Steg 3b: Domänkontrakt och fraktal dokumentation (Cykel 8 - TCK-008B)
+# Steg 3b: Domänkontrakt och fraktal dokumentation (Cykel 9 - TCK-010-011)
 
-## 1. Domänkontrakt (`LiveListenerService`)
+## 1. Domänkontrakt
 
-### Metodsignaturer & Egenskaper
-- `startListening(): Promise<void>`:
-  Sätter `consent.granted = true` direkt och aktiverar sessionen utan fördröjande röstmeddelanden.
-- `confirmConsent(): Promise<void>`:
-  Sätter `consent.granted = true` direkt och aktiverar sessionen.
-- `sendTextPrompt(text: string): void`:
-  Skickar text till Gemini via `this.liveSession.sendRealtimeInput({ text })` i enlighet med Gemini 3.8 Live-protokollet i `SKILL.md`.
-- `handleIncomingText(text: string, speakerId?: string): void`:
-  Matchar text mot symboler via symbolmotorn och skickar resulterande brickor till avdupliceraren.
-- `handleIncomingFunctionCall(call: any): void`:
-  Tolkar `update_topic_zones` och skickar de strukturerade brickorna till avdupliceraren samt returnerar bekräftelse till Gemini.
-- `emitUtteranceWithDeduplication(speakerId: string, text: string, tiles: AacTile[]): void`:
-  Central avduplicerare med en rullande `recentTilesCache: Map<string, number>` (4000ms TTL). Förhindrar att samma ikonnyckel visas flera gånger när transkription och funktionsanrop anländer parallellt.
-- `updateDiagnosticStatus(status: string): void`:
-  Uppdaterar diagnostikraden i realtid. Vid saknad nyckel sätts `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"`.
+### Domän `aac_display`
+- **Sticky Floor Kontrakt**:
+  ```typescript
+  export interface StickyFloorState {
+    isUserInteracting: boolean;
+    isGracePeriodActive: boolean;
+    thinkingPrompt: string | null; // t.ex. "Kalle tänker... vänta."
+  }
+  ```
+  - `startInteraction()`: Sätter `isUserInteracting = true` och pausar inkommande uppdateringar. Startar 30s hard timeout.
+  - `endInteraction()`: Startar 5000ms Grace Period.
+  - `cancelInteraction()`: Avbryter grace period och hard timeout omedelbart, sätter `isUserInteracting = false`.
+
+- **Layoutkontrakt**:
+  - `AacDisplay`: `h-screen max-h-screen overflow-hidden w-full bg-stone-100 flex flex-col lg:flex-row gap-5 p-4 select-none`.
+  - `SpeakerZoneView` & `UserControlZone`: `h-full min-h-0 flex-col`.
+  - `AacTileItem`: `w-20 h-20` / `w-24 h-24`.
+
+### Domän `live_listener`
+- **Gemini Live 3.8 Observer Kontrakt**:
+  - `systemInstruction`: Exakt definierad i specifikationen.
+  - `tools`: `update_topic_zones` med `behavior: "NON_BLOCKING"`.
+  - `LiveConnectConfig`: `inputAudioTranscription: {}`, `outputAudioTranscription: {}`.
+  - `sendRealtimeInput({ text: string })`: Skickar text utan avbrott.
+- **Diagnostic Recorder Kontrakt (`DiagnosticRecorder`)**:
+  - `logEvent(type: string, payload: any): void`
+  - `startRecording(): Promise<void>`
+  - `stopRecording(): void`
+  - `exportZip(): Promise<Blob>`
 
 ## 2. Fraktal dokumentation
-- `src/features/live_listener/doc/BUSINESS_RULES.md`:
-  Regel 1 fastslår att användarens manuella klick på mikrofonknappen utgör giltigt aktivt samtycke (`consent.granted = true`) och startar lyssningen omedelbart utan syntetiska röstfördröjningar.
+- `src/features/aac_display/doc/BUSINESS_RULES.md`: Uppdaterad med regler för Sticky Floor (`[RULE-001]`), Rullningsfrihet (`[RULE-003]`), Elastisk budskapsrad (`[RULE-006]`) och borttagna statiska scenknappar (`[SYSTEM-005]`).
+- `src/features/live_listener/doc/BUSINESS_RULES.md`: Uppdaterad med regler för Silent Observer (`[RULE-002]`, `[SYSTEM-009]`), Monologue Anchoring (`[RULE-010]`), Dual Voice (`[RULE-005]`), Fail Fast (`[ADR-018]`) och 60s RAM Diagnostic Recorder (`[SYSTEM-004]`).
+- `doc/AAC_COGNITIVE_RULES.md`: Kanonisk moderspecifikation.
