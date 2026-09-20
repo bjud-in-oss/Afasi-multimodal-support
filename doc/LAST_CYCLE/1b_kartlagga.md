@@ -1,42 +1,24 @@
-# Steg 1b: Kartlägga (Cykel 6 - TCK-006C: live_listener)
+# Steg 1b: Kartlägga (Cykel 7 - TCK-008: live_listener)
 
-## 1. Besvarande av GROW-frågorna (Arkitektonisk syntes)
+## 1. Besvarande av GROW-frågorna
 
-### Fråga 1 (Contract & Options - WebSocket & Gemini 3.8 Live):
-- **Modell & SDK**: Använder officiella `@google/genai` med `ai.live.connect({ model: 'models/gemini-3.8-live', config: ... })` över WebSockets enligt `gemini-live-api-dev`.
-- **Modaliteter**: `responseModalities: ['audio']` för nativ ljud- och röstgenerering.
-- **Tidsmedvetenhet (Temporal Grounding)**: Vid sessionsstart injiceras aktuell lokal tid och tidsram (datum, klockslag, dygnstillfälle som morgon/fika/lunch/kväll) i `systemInstruction` samt vid behov via `sendClientContent` vid tidsövergångar. Detta gör att Gemini förstår kontextuella referenser till t.ex. "frukost", "kaffe", "vila" i förhållande till klockan.
-- **Funktionsanrop**: Verktygskonfiguration med `update_topic_zones` (med `behavior: 'NON_BLOCKING'`) som uppdaterar afasi-brickorna kontinuerligt medan samtalet och ljudet strömmar.
+### Svar på Fråga 1 (Resilience & Fail Fast / ADR-018)
+I `liveListenerService.ts` avlägsnas referensen till `window.speechSynthesis` helt i konstruktorn. Istället för att i det tysta försöka tala via webbläsarens syntes, sätts standardvärdet för `this.speechSynthesizer` till en tom funktion `() => {}`. Vid eventuella anslutningsfel, saknad API-nyckel eller hårdvarufel kallas `updateDiagnosticStatus` direkt med tydliga felkoder i klartext (t.ex. `WS ERROR: 400 - Saknar API-nyckel (GEMINI_API_KEY saknas i miljö)`).
 
-### Fråga 2 (State & Resilience - En kontrollerad kamerainstans & Dynamisk Frekvensmotor):
-- **Exklusiv instanshantering**: Skapa `CameraManager` som singleton-kontroller för `getUserMedia`.
-- **Livscykelkoppling & Ren Nedstängning**: Kameran startas endast vid aktiv session. När mikrofonen/lyssnandet stängs av (`stopListening` eller `pauseListening`) anropas `cameraManager.stop()` som omedelbart anropar `track.stop()` på samtliga aktiva videospår i `MediaStream`, sätter strömmen till `null`, frigör interna resurser och släcker webbkamerans hårdvaruindikator.
-- **Dynamisk Frekvensreglering**:
-  - **Rate Limiter (Absolut lägsta gräns)**: `MIN_INTERVAL_MS = 1000` (aldrig oftare än 1.0 s mellan sända bildrutor oavsett triggers).
-  - **Vilopuls (Idle)**: `IDLE_INTERVAL_MS = 5000` (skicka bild var 5.0 sekund när rummet är lugnt och stilla).
-  - **Burst-läge (Gasa upp)**: `BURST_INTERVAL_MS = 1500` i 6.0 sekunder (`BURST_DURATION_MS = 6000`).
-  - **Triggerkällor för Burst**:
-    1. Talarväxling detekterad från Gemini eller lokalt VAD.
-    2. Skärmtryck / interaktion i AAC-gränssnittet (anrop via `triggerBurst()`).
-    3. Lokal **Pixel-Delta rörelsedetektor** i Canvas: Samplar videobildruta i låg upplösning (t.ex. 64x48 eller 32x24), jämför skillnad i luminans/färg mot föregående sampling (`delta > threshold`), och aktiverar burst-läget automatiskt om något rör sig framför kameran.
+### Svar på Fråga 2 (Contract & Interface / Testisolering)
+Fältet `this.speechSynthesizer` och metoden `setSpeechSynthesizer(fn)` behålls som en ren hook för testmockning under `__tests__/`. I produktion aktiveras aldrig webbläsarens `speechSynthesis`. Samtyckesstatus `awaiting_consent` uppdaterar diagnostikraden med `Gemini Event: session.awaiting_consent`, men genererar ingen dold webbtalsyntes.
 
-### Fråga 3 (Effects & Way Forward - Web Audio Autoplay, PCM16-ljud & Avbrott):
-- **Web Audio Autoplay Policy**: I webbläsare krävs en direkt användarinteraktion för att starta eller återuppta en `AudioContext`. Genom att anropa `audioContext.resume()` (eller `pcmPlayer.resume()`) synkront inuti klick-handlern för mikrofonknappen (`onToggleListening` i `UserControlZone` och `toggleListening` i `useAacDisplay`) säkerställs att ljudmotorn tillåts spela upp inkommande PCM16-ljud utan att tystas eller blockeras.
-- **Utmönstring av talsyntes**: Lokal `window.speechSynthesis` avlägsnas helt som ljudkälla för Geminis yttranden.
-- **PCM16 24kHz avspelning**: Inkommande ljudpaket (`serverContent.modelTurn.parts` med `inlineData`) avkodas från base64 till 16-bitars PCM little-endian (Int16Array) och konverteras till 32-bitars float för avspelning via Web Audio API `AudioContext` vid 24000 Hz samplingsfrekvens.
-- **Avbrottshantering (Barge-in / Interruption)**: När servern skickar `serverContent.interrupted === true` anropas `pcmPlayer.interrupt()`, vilket omedelbart avbryter schemalagda källor och nollställer uppspelningsbufferten.
+### Svar på Fråga 3 (State & Effects / Klartext & PCM)
+Alla ljudsignaler under körning i produktion hanteras av `PcmPlayer` matad av inkommande binära PCM16-chunks från Gemini Live WebSockets (`handleIncomingModelAudio`). Om WebSocket avbryts eller kastar fel, fångas detta i `onerror` / `onclose` / `catch` och skickas direkt till `handleWebSocketError` / `handleWebSocketClose`, vilket uppdaterar `lastEventStatus` och propageras till diagnostikraden i UI:t utan tysta undantag eller skenbeteenden.
 
----
-
-## 2. Vektoranalys & Risknoder
-- **`Resilience`**: Hårdvaruresurser (kamera + mikrofon), Web Audio Autoplay-policy och adaptiv nätverks-/bildbelastning.
+## 2. Aktiva vektorer & Vägval
+Ändringen berör resiliens och strikt felrapportering utan dolda fallbacks. Vi väljer en enda aktiv vektor (`Resilience`), vilket ger $V = 1 < 2$ och aktiverar linjärt snabbspår.
 
 ```json
 {
   "active_vectors": ["Resilience"],
-  "vector_count": 1,
-  "execution_mode": "linear",
-  "status": "COMPLETED",
+  "mode": "linear",
+  "ticket_id": "TCK-008",
   "next_step": "2a_forandra_utat_vision"
 }
 ```
