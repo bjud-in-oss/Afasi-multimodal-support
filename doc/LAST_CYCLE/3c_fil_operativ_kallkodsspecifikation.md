@@ -1,31 +1,53 @@
-# Steg 3c: Filoperativ källkodsspecifikation (Cykel 7 - TCK-008 Reviderad)
+# Steg 3c: Filoperativ källkodsspecifikation (Cykel 8 - TCK-008B)
 
-## 1. Mål & Krav i Revideringen
-1. **Mikrofon-PCM-strömning i `liveListenerService.ts`**:
-   - Vid `activateSession()`:
-     - Anropa `navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })`.
-     - Skapa en `AudioContext` eller `ScriptProcessorNode`/`AudioWorklet` (eller MediaStreamTrack-lyssnare) för att sampla 16kHz PCM16-mono.
-     - Konvertera PCM16 (Int16Array) till Base64.
-     - Skicka kontinuerligt över WebSocket via `this.liveSession.sendRealtimeInput({ audio: { data: base64Pcm, mimeType: "audio/pcm;rate=16000" } })`.
-     - Logga utgående PCM-paket med `this.logPcmPacket()`.
-     - Spara mikrofonström och stoppa alla ljudspår (`track.stop()`) i `stopListening()` och `resetConsent()`.
-2. **Direkta svar och funktioner från Gemini**:
-   - Gemini svarar med binärt PCM16-ljud (`modelTurn.parts` med `inlineData`) -> spelas upp via `this.pcmPlayer.enqueuePcmChunk(part.inlineData.data)`.
-   - Gemini funktionsanrop:
-     - Deklarera verktyget `update_topic_zones` i Gemini-sessionens `config.tools` med JSON-schema för talar-ID, ämne och bildbrickor (`tiles: [{ iconKey, speechText, confidence }]`).
-     - När `response?.serverContent?.modelTurn?.parts` innehåller `functionCall` med namn `update_topic_zones`:
-       - Logga anropet via `this.logFunctionCall("update_topic_zones")`.
-       - Tolka argumenten (`speakerId`, `tiles`, `topic`).
-       - Avfyra `this.options.onUtterance(event)` så att bildbrickorna skapas på skärmen i realtid.
-       - Skicka `sendRealtimeInput` med `functionResponses` tillbaka till Gemini om sessionen är öppen.
-3. **Borttagning av tyst speechSynthesis-fallback & Fail Fast (ADR-018)**:
-   - Ta bort alla anrop till `window.speechSynthesis` och `SpeechSynthesisUtterance` i `LiveListenerService`.
-   - `this.speechSynthesizer` är en tom no-op `() => {}` som standard i produktion.
-   - Vid mikrofonfel (`getUserMedia` avvisat): Sätt `updateDiagnosticStatus("MIKROFON-FEL: " + err.message)`.
-   - Vid WebSocket-fel: Sätt `updateDiagnosticStatus("WS ERROR: " + code + " - " + message)`.
-   - Vid kamerafel: Sätt `updateDiagnosticStatus("KAMERA-FEL: " + err.message)`.
-4. **Isolerade enhetstester i `liveListenerService.test.ts`**:
-   - Mocka `navigator.mediaDevices.getUserMedia` och `AudioContext` för att verifiera att mikrofonströmmen startas och stoppas.
-   - Verifiera att `sendRealtimeInput` anropas med PCM-data vid mikrofonavläsning.
-   - Verifiera att `functionCall` för `update_topic_zones` genererar talarhändelser och bildbrickor på skärmen.
-   - Verifiera att ingen `speechSynthesis` anropas i produktion.
+## 1. Filoperativ källkodsspecifikation
+
+### Fil 1: `src/features/live_listener/domain/liveListenerService.ts`
+1. **Manuellt klick som aktivt samtycke**:
+   - I `startListening()` och `confirmConsent()`:
+     ```typescript
+     this.consent = { granted: true, timestamp: Date.now() };
+     this.status = "listening";
+     this.notifyStatus();
+     await this.activateSession();
+     ```
+   - Inga fördröjande röstmeddelanden eller syntetiska dialoger körs.
+2. **Klartextdiagnostik vid saknad API-nyckel**:
+   - I `initLiveWebSocket()`:
+     ```typescript
+     const key = import.meta.env?.VITE_GEMINI_API_KEY || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : "");
+     if (!key) {
+       this.updateDiagnosticStatus("SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)");
+       this.handleWebSocketError(400, "SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)");
+       return;
+     }
+     ```
+3. **Gemini 3.8 Live-protokollefterlevnad (`SKILL.md`)**:
+   - I `ai.live.connect({ model, config, callbacks })`:
+     - Sätt `inputAudioTranscription: {}`
+     - Sätt `outputAudioTranscription: {}`
+     - Sätt `behavior: "NON_BLOCKING"` på verktygsdeklarationen för `update_topic_zones`.
+   - I `onmessage`:
+     - Lyssna på `response.serverContent?.inputTranscription?.text` -> `this.handleIncomingText(..., "speaker-user")`.
+     - Lyssna på `response.serverContent?.outputTranscription?.text` -> `this.handleIncomingText(..., "speaker-gemini")`.
+     - Lyssna på `part.text` -> `this.handleIncomingText(part.text, "speaker-gemini")`.
+     - Lyssna på `part.functionCall` och `response.toolCall?.functionCalls` -> `this.handleIncomingFunctionCall(...)`.
+   - Textinteraktioner skickas med `sendRealtimeInput({ text: ... })`.
+4. **Reaktiv avduplicering av brickor (`emitUtteranceWithDeduplication`)**:
+   - Inför `private recentTilesCache: Map<string, number> = new Map();`
+   - Rensa cacheposter äldre än 4000ms.
+   - Filtrera bort inkommande brickor vars `iconKey` finns i cachen.
+   - Lägg till kvarvarande unika brickor i cachen och anropa `this.options.onUtterance(event)` så att skärmen uppdateras i realtid utan dubletter.
+   - All tolkning härleds från Geminis skarpa dataström (ADR-018).
+
+### Fil 2: `src/features/live_listener/__tests__/liveListenerService.test.ts`
+- Skapa enhetstester som verifierar:
+  1. Manuellt klick på mikrofon (`startListening` / `confirmConsent`) sätter `consent.granted = true` direkt och triggar aktivering.
+  2. Saknad API-nyckel sätter omedelbart diagnostikstatus till `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"`.
+  3. `update_topic_zones` deklareras med `behavior: "NON_BLOCKING"`.
+  4. Transkriberad text (`inputTranscription` / `outputTranscription` / `part.text`) genererar reaktiva brickor.
+  5. Identiska symboler som anländer via både transkription och `update_topic_zones` inom 4 sekunder avdupliceras och sänds bara en gång till `onUtterance`.
+  6. Textprompt skickas via `sendRealtimeInput({ text })`.
+
+### Fil 3: `src/features/live_listener/doc/BUSINESS_RULES.md`
+- Regel 1: "Aktivt samtycke via manuellt klick: När användaren klickar på mikrofonknappen (startListening/confirmConsent) utgör handlingen ett aktivt samtycke (consent.granted = true). Ingen röstström analyseras eller skickas innan aktivt samtycke har givits, och sessionen aktiveras direkt utan fördröjande röstmeddelanden."
