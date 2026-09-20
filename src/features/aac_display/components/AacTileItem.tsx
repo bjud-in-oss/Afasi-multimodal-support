@@ -13,6 +13,10 @@ import {
   HelpCircle as QuestionIcon,
   X,
   Check,
+  ThumbsUp,
+  ThumbsDown,
+  HeartCrack,
+  Toilet,
 } from "lucide-react";
 import { AacTile } from "../domain/types";
 
@@ -39,7 +43,7 @@ export function AacTileItem({
   const needsClarification = tile.confidence >= 0.5 && tile.confidence < 0.8;
 
   const renderIcon = () => {
-    const props = { className: "w-20 h-20 sm:w-24 sm:h-24 stroke-[1.75]" };
+    const props = { className: "w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 stroke-[1.75]" };
     switch (tile.iconKey) {
       case "coffee":
         return <Coffee {...props} />;
@@ -61,6 +65,16 @@ export function AacTileItem({
         return <Home {...props} />;
       case "smile":
         return <Smile {...props} />;
+      case "thumbs-up":
+      case "yes":
+        return <ThumbsUp {...props} />;
+      case "thumbs-down":
+      case "no":
+        return <ThumbsDown {...props} />;
+      case "pain":
+        return <HeartCrack {...props} />;
+      case "toilet":
+        return <Toilet {...props} />;
       default:
         return <HelpCircle {...props} />;
     }
@@ -69,9 +83,9 @@ export function AacTileItem({
   return (
     <div
       data-testid={`tile-container-${tile.id}`}
-      className={`relative flex items-center justify-center p-6 aspect-square rounded-2xl border transition-all duration-200 group ${
+      className={`relative flex items-center justify-center p-3 sm:p-5 w-full h-full min-h-[110px] sm:min-h-[130px] rounded-2xl sm:rounded-3xl border transition-all duration-200 group ${
         isSelected
-          ? "bg-white border-stone-800 shadow-md ring-3 ring-stone-800/10 scale-[1.02]"
+          ? "bg-white border-stone-800 shadow-md ring-4 ring-stone-800/10 scale-[1.02]"
           : "bg-white/90 hover:bg-white border-stone-200/90 shadow-sm hover:shadow"
       }`}
     >
@@ -83,7 +97,9 @@ export function AacTileItem({
         aria-label={tile.speechText}
         className="w-full h-full flex items-center justify-center cursor-pointer focus:outline-none"
       >
-        <div className="text-stone-800">{renderIcon()}</div>
+        <div className="text-stone-800 flex items-center justify-center w-full h-full">
+          {renderIcon()}
+        </div>
       </button>
 
       {/* Mikro-kryss för tyst avfärdande ("dissa" utan tal) */}

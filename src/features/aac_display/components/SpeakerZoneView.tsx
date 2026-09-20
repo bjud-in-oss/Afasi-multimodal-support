@@ -1,4 +1,4 @@
-import { SpeakerZone, AacTile } from "../domain/types";
+import { SpeakerZone, AacTile, PERMANENT_SAFETY_TILES } from "../domain/types";
 import { AacTileItem } from "./AacTileItem";
 
 interface SpeakerZoneViewProps {
@@ -26,33 +26,34 @@ export function SpeakerZoneView({
   }[zone.colorTheme];
 
   const activePulse = zone.isActive ? "ring-2 ring-emerald-500/40 shadow-sm" : "";
+  const isDynamicEmpty = !zone.tiles || zone.tiles.length === 0;
+  const displayTiles = isDynamicEmpty ? PERMANENT_SAFETY_TILES : zone.tiles;
 
   return (
     <section
       data-testid={`speaker-zone-${zone.id}`}
-      className={`flex-1 h-full min-h-0 p-5 rounded-3xl border flex flex-col transition-all duration-500 select-none ${themeStyles} ${activePulse}`}
+      className={`flex-1 h-full min-h-0 p-3 sm:p-5 rounded-3xl border flex flex-col transition-all duration-500 select-none overflow-hidden ${themeStyles} ${activePulse}`}
     >
       {/* Rutnät för samtalsbrickor - helt utan rubriktext */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 place-content-start overflow-hidden">
-        {zone.tiles.map((tile) => (
+      <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 overflow-hidden">
+        {displayTiles.map((tile) => (
           <AacTileItem
             key={tile.id}
             tile={tile}
             isSelected={tile.id === selectedTileId}
             onSelect={onSelectTile}
             onDismissSilent={
-              onDismissTileSilent ? (t) => onDismissTileSilent(zone.id, t) : undefined
+              !isDynamicEmpty && onDismissTileSilent
+                ? (t) => onDismissTileSilent(zone.id, t)
+                : undefined
             }
             onConfirmSilent={
-              onConfirmTileSilent ? (t) => onConfirmTileSilent(zone.id, t) : undefined
+              !isDynamicEmpty && onConfirmTileSilent
+                ? (t) => onConfirmTileSilent(zone.id, t)
+                : undefined
             }
           />
         ))}
-
-        {/* Vilsam tom yta vid noll samtalsämnen */}
-        {zone.tiles.length === 0 && (
-          <div className="col-span-2 h-48 flex items-center justify-center rounded-2xl border border-dashed border-stone-200/70" />
-        )}
       </div>
     </section>
   );

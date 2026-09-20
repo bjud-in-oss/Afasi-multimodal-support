@@ -68,43 +68,43 @@ export function UserControlZone({
   return (
     <aside
       data-testid="aac-user-control-zone"
-      className="w-full lg:w-80 h-full min-h-0 p-5 rounded-3xl border border-stone-300/80 bg-stone-100/90 flex flex-col gap-5 shadow-sm select-none"
+      className="w-full max-h-24 sm:max-h-28 lg:max-h-none lg:w-80 lg:h-full flex flex-row lg:flex-col items-center lg:items-stretch justify-between p-3 lg:p-5 rounded-2xl lg:rounded-3xl border border-stone-300/80 bg-stone-100/90 shadow-sm select-none gap-2 sm:gap-3 lg:gap-5 shrink-0"
     >
       {/* 1. Snabb-release och rensning av markering */}
       {onClear && (
-        <div>
+        <div className="shrink-0 lg:w-full">
           <button
             type="button"
             data-testid="btn-clear-selection"
             onClick={onClear}
             disabled={!hasSelectedTile}
             aria-label="Rensa markering"
-            className={`w-full py-4 rounded-2xl border flex items-center justify-center transition-all ${
+            className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
               hasSelectedTile
                 ? "bg-white text-stone-700 border-stone-300 hover:bg-stone-50 shadow-sm cursor-pointer active:scale-95"
                 : "bg-stone-200/50 text-stone-300 border-stone-200/60 cursor-not-allowed"
             }`}
           >
-            <RotateCcw className="w-7 h-7 stroke-[2]" />
+            <RotateCcw className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2]" />
           </button>
         </div>
       )}
 
       {/* 2. Feedbackreglage: Grön bock och Rött kryss för successiv inlärning */}
-      <div className="flex gap-3 pt-2 border-t border-stone-200/80">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center max-w-sm lg:max-w-none lg:w-full lg:pt-2 lg:border-t lg:border-stone-200/80">
         <button
           type="button"
           data-testid="feedback-confirm"
           onClick={onConfirm}
           disabled={!hasSelectedTile}
           aria-label="Bekräfta"
-          className={`flex-1 py-4 rounded-2xl border flex items-center justify-center transition-all ${
+          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
             hasSelectedTile
               ? "bg-emerald-700 text-white border-emerald-800 hover:bg-emerald-800 shadow-sm cursor-pointer active:scale-95"
               : "bg-stone-200/60 text-stone-400 border-stone-200 cursor-not-allowed"
           }`}
         >
-          <Check className="w-8 h-8 stroke-[3]" />
+          <Check className="w-7 h-7 sm:w-8 sm:h-8 stroke-[3]" />
         </button>
 
         <button
@@ -113,58 +113,53 @@ export function UserControlZone({
           onClick={onReject}
           disabled={!hasSelectedTile}
           aria-label="Avfärda"
-          className={`flex-1 py-4 rounded-2xl border flex items-center justify-center transition-all ${
+          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
             hasSelectedTile
               ? "bg-rose-700 text-white border-rose-800 hover:bg-rose-800 shadow-sm cursor-pointer active:scale-95"
               : "bg-stone-200/60 text-stone-400 border-stone-200 cursor-not-allowed"
           }`}
         >
-          <X className="w-8 h-8 stroke-[3]" />
+          <X className="w-7 h-7 sm:w-8 sm:h-8 stroke-[3]" />
         </button>
+
+        {/* 3. Visuell statusindikator vid feedback */}
+        {feedbackStatus && (
+          <div
+            data-testid="feedback-status-indicator"
+            className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-2 px-3 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+              feedbackStatus === "confirmed"
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-rose-100 text-rose-800"
+            }`}
+          >
+            {feedbackStatus === "confirmed" ? (
+              <Check className="w-5 h-5 stroke-[2.5]" />
+            ) : (
+              <X className="w-5 h-5 stroke-[2.5]" />
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 3. Visuell statusindikator vid feedback */}
-      {feedbackStatus && (
-        <div
-          data-testid="feedback-status-indicator"
-          className={`py-2 px-3 rounded-xl flex items-center justify-center transition-all ${
-            feedbackStatus === "confirmed"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-rose-100 text-rose-800"
-          }`}
-        >
-          {feedbackStatus === "confirmed" ? (
-            <Check className="w-5 h-5 stroke-[2.5]" />
-          ) : (
-            <X className="w-5 h-5 stroke-[2.5]" />
-          )}
-        </div>
-      )}
-
       {/* 4. Mikrofon och samtyckesknapp för live-läge */}
-      <div className="mt-auto pt-2">
+      <div className="shrink-0 lg:w-full lg:mt-auto lg:pt-2">
         <button
           type="button"
           data-testid="btn-toggle-mic"
           onClick={onToggleListening}
           aria-label="Mikrofon"
-          className={`w-full py-4 rounded-2xl border flex items-center justify-center transition-all cursor-pointer relative ${
+          className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all cursor-pointer relative ${
             isListening
               ? "bg-stone-900 text-emerald-400 border-stone-900 shadow-md ring-2 ring-emerald-500/20"
               : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
           }`}
         >
           {isListening ? (
-            <Mic className="w-7 h-7 stroke-[2]" />
+            <Mic className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2]" />
           ) : (
-            <MicOff className="w-7 h-7 stroke-[2]" />
+            <MicOff className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2]" />
           )}
 
-          {/* Visuell statussymbol för Gemini Live-anslutning:
-              - Röd/Grå punkt: Frånkopplad / Inget API-svar
-              - Gul punkt: Ansluter till Gemini Live...
-              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar
-              - Dubbelklick/tryck: Växlar dold diagnostikpanel */}
           <span
             data-testid="live-status-dot"
             role="button"
@@ -178,7 +173,7 @@ export function UserControlZone({
                 ? "Ansluter till Gemini Live (Dubbelklicka för diagnostik)"
                 : "Frånkopplad (Dubbelklicka för diagnostik)"
             }
-            className={`absolute top-3.5 right-3.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-all duration-300 cursor-pointer ${
+            className={`absolute top-2 right-2 lg:top-3.5 lg:right-3.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-all duration-300 cursor-pointer ${
               connectionStatus === "active"
                 ? "bg-emerald-500 animate-pulse ring-2 ring-emerald-400/50"
                 : connectionStatus === "connecting"

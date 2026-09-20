@@ -326,4 +326,76 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       expect(screen.queryByTestId("diagnostics-panel")).not.toBeInTheDocument();
     });
   });
+
+  describe("Layout och Skärmutrymme (TCK-012 / UI-FIX)", () => {
+    it("renderar UserControlZone som en kompakt botten-docka med max-h-24 sm:max-h-28 och flex-row", () => {
+      render(<AacDisplay />);
+      const controlZone = screen.getByTestId("aac-user-control-zone");
+      expect(controlZone.className).toContain("max-h-24");
+      expect(controlZone.className).toContain("sm:max-h-28");
+      expect(controlZone.className).toContain("flex-row");
+      expect(controlZone.className).toContain("justify-between");
+
+      // Verifiera att kontrollknapparna finns
+      expect(screen.getByTestId("btn-clear-selection")).toBeInTheDocument();
+      expect(screen.getByTestId("feedback-confirm")).toBeInTheDocument();
+      expect(screen.getByTestId("feedback-reject")).toBeInTheDocument();
+      expect(screen.getByTestId("btn-toggle-mic")).toBeInTheDocument();
+    });
+
+    it("ger SpeakerZoneView flex-1 h-full min-h-0 för att äga huvudytan", () => {
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1");
+      });
+
+      const zoneSection = screen.getByTestId("speaker-zone-speaker-1");
+      expect(zoneSection.className).toContain("flex-1");
+      expect(zoneSection.className).toContain("h-full");
+      expect(zoneSection.className).toContain("min-h-0");
+    });
+
+    it("visar permanenta trygghetsbrickor ([Ja], [Nej], [Ont/Smärta], [Toalett], [Vatten]) vid tystnad eller tomma ämnen [RULE-007]", () => {
+      const emptyZone = {
+        id: "speaker-silent",
+        colorTheme: "emerald" as const,
+        tiles: [],
+        isActive: true,
+      };
+
+      const handleSelect = vi.fn();
+      render(
+        <SpeakerZoneView
+          zone={emptyZone}
+          onSelectTile={handleSelect}
+        />
+      );
+
+      // Verifiera att alla 5 trygghetsbrickor renderas
+      const yesTile = screen.getByTestId("aac-tile-safety-yes");
+      const noTile = screen.getByTestId("aac-tile-safety-no");
+      const painTile = screen.getByTestId("aac-tile-safety-pain");
+      const toiletTile = screen.getByTestId("aac-tile-safety-toilet");
+      const waterTile = screen.getByTestId("aac-tile-safety-water");
+
+      expect(yesTile).toBeInTheDocument();
+      expect(noTile).toBeInTheDocument();
+      expect(painTile).toBeInTheDocument();
+      expect(toiletTile).toBeInTheDocument();
+      expect(waterTile).toBeInTheDocument();
+
+      // Verifiera att ingen streckad tom box renderas
+      const zone = screen.getByTestId("speaker-zone-speaker-silent");
+      expect(zone.querySelector(".border-dashed")).not.toBeInTheDocument();
+
+      // Verifiera att klick på en trygghetsbricka anropar callback
+      fireEvent.click(painTile);
+      expect(handleSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "safety-pain",
+          speechText: "Ont / Smärta",
+        })
+      );
+    });
+  });
 });
