@@ -1,7 +1,6 @@
-# Godkännande av Cykel 6 (TCK-006C)
+# Steg 4: Godkännande av Fas 1 (Cykel 7 - TCK-008)
 
-TOKEN: TCK006C-DYNAMIC-CAMERA-BURST-AUDIO-RESUME-9241
-STATUS: APPROVED
-DATE: 2026-09-19T05:11:39-07:00
-TICKET: TCK-006C
-DOMAIN: live_listener
+Token: FAIL_FAST_AUDIO_981
+Godkänt av: Användaren via explicit instruktion (REVIDERING AV PLAN OCH KOD TCK-008: Komplett Mikrofon-PCM till Gemini Live)
+Datum: 2026-09-20
+Status: Godkänd för Fas 2 TDD & källkodsändringar.

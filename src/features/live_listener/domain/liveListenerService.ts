@@ -75,6 +75,9 @@ export class LiveListenerService {
   private isProcessingFrame: boolean = false;
   private liveSession: any = null;
   private micActivatedByClick: boolean = false;
+  private audioStream: MediaStream | null = null;
+  private audioContext: AudioContext | null = null;
+  private audioProcessor: ScriptProcessorNode | null = null;
 
   constructor(options: ListenerOptions = {}) {
     this.options = {
@@ -86,15 +89,9 @@ export class LiveListenerService {
     this.cameraManager = CameraManager.getInstance();
     this.pcmPlayer = new PcmPlayer(24000);
 
-    this.speechSynthesizer = (text: string) => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "sv-SE";
-        utterance.rate = 0.9;
-        window.speechSynthesis.speak(utterance);
-      }
-    };
+    // Enligt ADR-018: Inga tysta fallbacks till webbläsarens speechSynthesis i produktion.
+    // Ljudet kommer uteslutande via Gemini Live PCM-strömmen.
+    this.speechSynthesizer = (_text: string) => {};
   }
 
   public getModel(): string {
@@ -269,11 +266,117 @@ export class LiveListenerService {
     // Initiera och anslut WebSocket till Gemini Live API om API-nyckel finns
     await this.initLiveWebSocket();
 
+    // Starta mikrofoninspelning (16kHz PCM16-mono)
+    await this.startMicrophoneStream();
+
     // Starta kameran vid aktivt lyssnande om tillåtet
     if (this.options.enableCamera !== false) {
-      await this.cameraManager.start();
-      this.notifyCameraStatus();
-      this.scheduleNextCameraFrame();
+      try {
+        await this.cameraManager.start();
+        this.notifyCameraStatus();
+        this.scheduleNextCameraFrame();
+      } catch (err: any) {
+        this.updateDiagnosticStatus(`KAMERA-FEL: ${err?.message || "Kunde inte starta kamera"}`);
+      }
+    }
+  }
+
+  public async startMicrophoneStream(): Promise<void> {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
+    try {
+      this.stopMicrophoneStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      this.audioStream = stream;
+
+      const AudioCtxClass =
+        (typeof window !== "undefined" && (window.AudioContext || (window as any).webkitAudioContext)) ||
+        (globalThis as any).AudioContext;
+
+      if (!AudioCtxClass) return;
+
+      const ctx = new AudioCtxClass({ sampleRate: 16000 });
+      this.audioContext = ctx;
+
+      const source = ctx.createMediaStreamSource(stream);
+      // Buffertstorlek 4096 vid 16kHz ger ~256ms chunkar
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      this.audioProcessor = processor;
+
+      processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        if (this.status !== "listening") return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        if (!inputData || inputData.length === 0) return;
+
+        // Konvertera Float32 (-1.0 till 1.0) till Int16 PCM
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+
+        // Konvertera Int16Array till Base64
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64Pcm = btoa(binary);
+
+        this.logPcmPacket();
+
+        if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
+          this.liveSession.sendRealtimeInput({
+            audio: {
+              data: base64Pcm,
+              mimeType: "audio/pcm;rate=16000",
+            },
+          });
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(ctx.destination);
+    } catch (err: any) {
+      this.handleMicrophoneError(err);
+    }
+  }
+
+  public handleMicrophoneError(err: any): void {
+    const msg = err?.message || String(err);
+    const formatted = `MIKROFON-FEL: ${msg}`;
+    console.error(formatted);
+    this.updateDiagnosticStatus(formatted);
+  }
+
+  public stopMicrophoneStream(): void {
+    if (this.audioProcessor) {
+      try {
+        this.audioProcessor.disconnect();
+      } catch {}
+      this.audioProcessor = null;
+    }
+    if (this.audioContext) {
+      try {
+        this.audioContext.close();
+      } catch {}
+      this.audioContext = null;
+    }
+    if (this.audioStream) {
+      try {
+        this.audioStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      this.audioStream = null;
     }
   }
 
@@ -288,7 +391,7 @@ export class LiveListenerService {
       this.closeLiveSession();
       const ai = new GoogleGenAI({ apiKey: key });
 
-      // Anslut till Gemini Live API via WebSockets
+      // Anslut till Gemini Live API via WebSockets med function calling för bildbrickor
       const session = await ai.live.connect({
         model: this.getModel(),
         config: {
@@ -296,6 +399,61 @@ export class LiveListenerService {
           systemInstruction: {
             parts: [{ text: this.getTemporalInstructionFragment() }],
           },
+          tools: [
+            {
+              functionDeclarations: [
+                {
+                  name: "update_topic_zones",
+                  description:
+                    "Skapar eller uppdaterar AAC-bildbrickor på skärmen baserat på vad samtalspartnern säger.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      speakerId: {
+                        type: "STRING",
+                        description: "Identifierare för talaren, t.ex. 'speaker-1' eller namnet.",
+                      },
+                      topic: {
+                        type: "STRING",
+                        description: "Kort sammanfattning av vad som sades.",
+                      },
+                      tiles: {
+                        type: "ARRAY",
+                        description: "Lista över relevanta bildbrickor att visa.",
+                        items: {
+                          type: "OBJECT",
+                          properties: {
+                            iconKey: {
+                              type: "STRING",
+                              enum: [
+                                "coffee",
+                                "cake",
+                                "water",
+                                "cart",
+                                "apple",
+                                "pill",
+                                "heart",
+                                "sun",
+                                "home",
+                                "smile",
+                                "help",
+                                "thumbs-up",
+                                "thumbs-down",
+                              ],
+                            },
+                            speechText: { type: "STRING" },
+                            confidence: { type: "NUMBER" },
+                          },
+                          required: ["iconKey", "speechText"],
+                        },
+                      },
+                    },
+                    required: ["speakerId", "tiles"],
+                  },
+                },
+              ],
+            },
+          ],
         },
         callbacks: {
           onopen: () => {
@@ -307,6 +465,15 @@ export class LiveListenerService {
                 if (part.inlineData && part.inlineData.data) {
                   this.handleIncomingModelAudio(part.inlineData.data);
                 }
+                if (part.functionCall) {
+                  this.handleIncomingFunctionCall(part.functionCall);
+                }
+              }
+            }
+            // Hantera även functionCalls på rotnivå om Gemini skickar dem där
+            if (response?.toolCall?.functionCalls) {
+              for (const fc of response.toolCall.functionCalls) {
+                this.handleIncomingFunctionCall(fc);
               }
             }
             if (response?.serverContent?.interrupted) {
@@ -337,6 +504,53 @@ export class LiveListenerService {
     }
   }
 
+  public handleIncomingFunctionCall(call: any): void {
+    if (!call || call.name !== "update_topic_zones") return;
+
+    this.logFunctionCall("update_topic_zones");
+    const args = call.args || {};
+    const speakerId: string = args.speakerId || "speaker-gemini";
+    const topicText: string = args.topic || "Samtalsämne";
+    const rawTilesList: any[] = Array.isArray(args.tiles) ? args.tiles : [];
+
+    const parsedTiles: AacTile[] = rawTilesList.map((t, idx) => ({
+      id: `live-tile-${speakerId}-${t.iconKey || "help"}-${Date.now()}-${idx}`,
+      iconKey: (t.iconKey || "help") as AacTile["iconKey"],
+      confidence: typeof t.confidence === "number" ? t.confidence : 0.9,
+      isGroundTruth: (t.confidence ?? 0.9) >= 0.8,
+      speechText: t.speechText || t.iconKey || "Symbol",
+    }));
+
+    const weightedTiles = defaultAdaptiveMemory.applyLearnedWeights("general", parsedTiles);
+
+    const event: LiveUtteranceEvent = {
+      id: `utterance-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      speakerId,
+      text: topicText,
+      tiles: weightedTiles,
+      timestamp: Date.now(),
+    };
+
+    if (this.options.onUtterance) {
+      this.options.onUtterance(event);
+    }
+
+    // Skicka svar tillbaka till Gemini om sessionen är aktiv
+    if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
+      this.liveSession.sendRealtimeInput({
+        toolResponse: {
+          functionResponses: [
+            {
+              name: "update_topic_zones",
+              response: { output: { success: true, count: weightedTiles.length } },
+              id: call.id,
+            },
+          ],
+        },
+      });
+    }
+  }
+
   public handleWebSocketError(code: string | number, message: string): void {
     const formatted = `WS ERROR: ${code} - ${message}`;
     console.error(formatted);
@@ -351,6 +565,7 @@ export class LiveListenerService {
 
   public pauseListening(): void {
     this.stopCameraAndTimers();
+    this.stopMicrophoneStream();
     if (this.status === "listening") {
       this.status = "paused";
       this.notifyStatus();
@@ -371,6 +586,7 @@ export class LiveListenerService {
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
     this.stopCameraAndTimers();
+    this.stopMicrophoneStream();
     this.closeLiveSession();
     this.pcmPlayer.interrupt();
     if (this.options.onActiveSpeakerChange) {
@@ -385,6 +601,7 @@ export class LiveListenerService {
     this.notifyStatus();
     this.updateDiagnosticStatus("Frånkopplad (Väntar på aktivering)");
     this.stopCameraAndTimers();
+    this.stopMicrophoneStream();
     this.closeLiveSession();
     this.pcmPlayer.interrupt();
   }

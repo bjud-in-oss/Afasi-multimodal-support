@@ -195,6 +195,56 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
       expect(testMockResult).not.toBeNull();
       expect(emittedUtterances.length).toBe(1);
     });
+
+    it("har en no-op speechSynthesizer som standard utan att anropa webbläsarens speechSynthesis", () => {
+      const defaultService = new LiveListenerService();
+      // Anrop till confirmConsent och startListening i standardläge skall inte kasta eller anropa window.speechSynthesis
+      defaultService.startListening();
+      defaultService.confirmConsent();
+      expect(defaultService.getStatus()).toBe("listening");
+    });
+
+    it("hanterar inkommande update_topic_zones functionCall från Gemini Live och avfyrar onUtterance", () => {
+      const mockCall = {
+        name: "update_topic_zones",
+        args: {
+          speakerId: "speaker-maggan",
+          topic: "kaffe och fika",
+          tiles: [
+            { iconKey: "coffee", speechText: "Kaffe", confidence: 0.95 },
+            { iconKey: "cake", speechText: "Kanelbulle", confidence: 0.9 },
+          ],
+        },
+      };
+
+      service.handleIncomingFunctionCall(mockCall);
+
+      expect(emittedUtterances.length).toBe(1);
+      const emitted = emittedUtterances[0];
+      expect(emitted.speakerId).toBe("speaker-maggan");
+      expect(emitted.text).toBe("kaffe och fika");
+      expect(emitted.tiles.length).toBe(2);
+      expect(emitted.tiles[0].iconKey).toBe("coffee");
+      expect(service.getLastEventStatus()).toBe("FunctionCall: update_topic_zones");
+    });
+
+    it("rapporterar fel i klartext om mikrofonavläsning misslyckas", async () => {
+      service.handleMicrophoneError(new Error("Permission denied by user"));
+      expect(service.getLastEventStatus()).toBe("MIKROFON-FEL: Permission denied by user");
+    });
+
+    it("startar och stoppar mikrofonströmmen via stopListening", async () => {
+      const stopTrackSpy = vi.fn();
+      const mockStream = {
+        getTracks: () => [{ stop: stopTrackSpy }],
+      };
+      (service as any).audioStream = mockStream;
+
+      service.stopListening();
+
+      expect(stopTrackSpy).toHaveBeenCalled();
+      expect((service as any).audioStream).toBeNull();
+    });
   });
 });
 
