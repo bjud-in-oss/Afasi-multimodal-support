@@ -1,24 +1,9 @@
-# Steg 2a: Förändra utåt - Vision & Arkitektonisk anpassning (Cykel 9 - TCK-010-011)
+# Steg 2a: Förändra Utåt - Vision (Cykel 10 - TCK-013)
 
-## 1. Yttre vision & Kognitiv upplevelse
-Den yttre upplevelsen formas efter de kanoniska reglerna i `doc/AAC_COGNITIVE_RULES.md`:
-
-1. **Rullningsfri och visuell ro (`[RULE-003]`)**:
-   - Skärmen är helt befriad från rullningslister (`h-screen max-h-screen overflow-hidden select-none`). Inga element rullar bortom synfältet.
-   - Ikoner fyller brickorna med hög synlighet och storlek (`w-20` / `w-24`).
-   - Statiska testknappar har städats bort (`[SYSTEM-005]`); alla samtalsämnen genereras dynamiskt av AI:n i harmoni med stunden.
-
-2. **Skyddat arbetsminne via Sticky Floor (`[RULE-001]`)**:
-   - När användaren vidrör skärmen pausas alla inkommande bildförändringar så att brukaren inte tappar sitt fokus.
-   - En 5-sekunders tidsfrist (Grace Period) ges efter avslutad beröring.
-   - Den delade laptopen visar en pulserande ram runt deltagarens profil med texten `"Kalle tänker... vänta."` så att övriga deltagare i rummet vet att ett inlägg förbereds.
-   - Ett tryck på `[Rensa]` släpper ordet fritt direkt, och en 30s säkerhetstimer förhindrar låsning vid oavsiktlig beröring.
-
-3. **Tyst kognitiv observatör i rummet (`[RULE-002]`, `[SYSTEM-009]`)**:
-   - Gemini Live iakttar samtalet tyst utan att bryta in med verbalt tal.
-   - Den destillerar samtalets kärna till 2–3 visuella symboler och anropar icke-blockerande verktyget `update_topic_zones` (`behavior: "NON_BLOCKING"`).
-   - Offentligt tal i rummet sker uteslutande när användaren godkänner meningen med den gröna bocken (`GreenCheckButton`).
-
-4. **Klartextdiagnostik och 60-sekunders RAM-recorder (`[ADR-018]`, `[SYSTEM-004]`)**:
-   - Om API-nyckel saknas visas `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` direkt i diagnostikraden.
-   - En rullande 60-sekunders inspelningsbuffert kan laddas ned som `diagnostics_60s.zip` via den dolda diagnostikpanelen.
+## 1. Användarcentrerad Vision för Budskapsraden
+Afasideltagaren har ofta svårigheter med verbal produktion och arbetsminnesbelastning. Budskapsraden fungerar som en extern tankebrygga:
+1. **Fritt sammanställande utan press**: Deltagaren trycker på föreslagna koncept eller trygghetsbrickor (t.ex. [Kaffe] + [Bulle]). De flyttas mjukt till budskapsraden i bottenzonen.
+2. **Elastisk överblick (`[RULE-006]`, `[RULE-003]`)**: Oavsett om meningen innehåller 1 eller 5 symboler är alla synliga samtidigt. Ingen rullningslist, inga dolda element under en scroll-tröskel.
+3. **Trygg punktkorrigering (`[RULE-015]`)**: Om deltagaren råkade trycka fel på den andra symbolen behöver inte hela meningen raderas. Ett klick provläser privat och presenterar ett Typ A rött kryss för att radera just den symbolen.
+4. **Offentlig röst och AI-samspel (`[RULE-005]`, `[SYSTEM-001]`)**: När meningen är klar trycker deltagaren på den fasta Gröna Bocken. Enheten talar med klar röst och Gemini Live mottar textimpulsen samtidigt.
+5. **Andningspaus (`[RULE-008]`)**: Inget hoppigt eller hetsigt; ett 3000 ms vilsamt mellanrum låter deltagaren och samtalspartnern ta in budskapet innan fönstret rensas för nästa yttrande.

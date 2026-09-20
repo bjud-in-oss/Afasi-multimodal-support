@@ -1,48 +1,40 @@
-# Steg 1a: Orientera (Cykel 9 - TCK-010-011: Dynamisk AAC-yta & Gemini Live Protokoll)
+# Steg 1a: Orientera (Cykel 10 - TCK-013: Elastisk Budskapsrad, Offentlig Röst & Post-Speech Reset)
 
 ## 1. Problembeskrivning & Målbild
-Implementera den fullständiga specifikationen i `doc/AAC_COGNITIVE_RULES.md` och koppla samman den kognitiva rullningsfria AAC-ytan med Gemini Live API-protokollet:
+Implementera den kompletta Budskapsraden (Message Bar) och integrera den med Offentlig röst och Post-speech pause enligt `doc/AAC_COGNITIVE_RULES.md`:
 
-1. **Rullningsfri & Elastisk Yta (`[RULE-003]`)**:
-   - `AacDisplay.tsx`: Lås rotytan till `h-screen max-h-screen overflow-hidden w-full bg-stone-100 flex flex-col lg:flex-row gap-5 p-4 select-none`.
-   - `UserControlZone.tsx` och `SpeakerZoneView.tsx`: Sätt `h-full min-h-0 flex-col` för att eliminera rullningslister och ge elastisk skalning.
-   - `AacTileItem.tsx`: Förstora symbolikoner till flexibel fyllnad (`w-20 h-20` / `w-24 h-24`).
-   - Radera de statiska övningsknapparna (Fika, Handla, Hälsa) så att alla kategorier och samtalszoner byggs 100 % dynamiskt av AI-agenten (`[SYSTEM-005]`).
+1. **Elastisk Budskapsrad (`[RULE-006]`, `[ADR-019]`, `[RULE-003]`)**:
+   - Bygga och uppdatera tillståndshanteringen i `useAacDisplay.ts` för en sekvens av valda symboler (`messageQueue`: max 5 symboler).
+   - När afasideltagaren klickar på förslagsbrickor eller trygghetsbrickor adderas de till `messageQueue` (om `messageQueue.length < 5`).
+   - Brickorna i budskapsraden skalar mjukt med CSS Flexbox (`w-24` ner till `w-16` vid 5 symboler) så att hela meningen alltid syns i sin helhet utan rullningslister (`[RULE-003]`).
 
-2. **Sticky Floor & Laptop-projektion (`[RULE-001]`, `[RULE-009]`, `[RULE-016]`)**:
-   - Vid beröring (`onTouchStart`, `onPointerDown`, `touchMove`, drag) pausas alla inkommande bakgrundsuppdateringar (`update_topic_zones`).
-   - Starta en 5000 ms Grace Period-timer vid `onTouchEnd`/`onPointerUp`. Ny beröring nollställer timern.
-   - Ett klick på `[Rensa]` nollställer budskapsraden och avbryter Grace Period omedelbart.
-   - En 30-sekunders hard timeout återupptar bakgrundsuppdateringar vid oavbruten beröring.
-   - Skicka status till den delade laptopen som visar pulserande ram med texten `"Kalle tänker... vänta."`.
+2. **Punktkorrigering med Typ A Kryss (`[RULE-015]`, `[RULE-005]`)**:
+   - Ett klick på en enskild symbol i budskapsraden provläser ordet privat via tyst lokal TTS (`[RULE-005]`).
+   - Visar ett litet rött punktavfärdande `[x]` (Typ A kryss) ovanför/på den valda symbolen för att radera enbart den symbolen ur meningen utan att hela meningen raderas.
 
-3. **Gemini Live 3.8 Silent Observer & Protokoll (`[RULE-002]`, `[SYSTEM-001]`, `[SYSTEM-009]`)**:
-   - Aktivt samtycke via klick på mikrofonknappen (`consent.granted = true`) och direkt `activateSession()` utan verbal hälsning.
-   - `systemInstruction`: Exakt fastställd instruktion för tyst kognitiv observatör som inte pratar högt under lyssning, inte transkriberar ordagrant utan destillerar till 2–3 visuella kärnkoncept, ankrar monologer >30s och hanterar symmetrisk talardiarisering.
-   - Verktygsdeklaration: `update_topic_zones` med `behavior: "NON_BLOCKING"`, parametrar för `participantId`, `colorZone`, `behavior` och `tiles` (max 2–5 koncept).
-   - `LiveConnectConfig`: `inputAudioTranscription: {}` (16kHz PCM in), `outputAudioTranscription: {}` (24kHz PCM ut).
-   - Textimpulser: Skickas uteslutande via `sendRealtimeInput({ text: ... })` enligt `SKILL.md`.
+3. **Offentlig Röst & Gemini Live-impuls (`[RULE-005]`, `[SYSTEM-001]`)**:
+   - Klick på den fasta Gröna Bocken till höger i budskapsraden/kontrollzonen läser upp hela den sammansatta meningen högt via enhetens högtalare (`messageQueue.map(t => t.speechText).join(" ")`).
+   - Skickar samtidigt hela meningen tyst till Gemini Live via `defaultLiveListener.sendTextImpulse(...)` för att ge modellen full kognitiv kontext av vad afasideltagaren uttryckt.
 
-4. **Fail-Fast Diagnostik & 60s RAM-recorder (`[ADR-018]`, `[SYSTEM-004]`)**:
-   - Om API-nyckel saknas visas `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` i klartext i diagnostikraden.
-   - `diagnosticRecorder.ts`: Underhåller en 60s rullande RAM-buffert bestående av tidsstämplade `events.json` (med time-awareness och funktionsanrop), skärmström (`getDisplayMedia`), kameraström (`getUserMedia`) och kombinerat PCM-ljud.
-   - Knappen `[Ladda ned Felsöknings-ZIP]` i den dolda diagnostikpanelen (`UserControlZone.tsx`) laddar ned `diagnostics_60s.zip`.
+4. **Post-Speech Reset & Andningspaus (`[RULE-008]`)**:
+   - Direkt efter uppläsning inträder en 3000 ms vilsam andningspaus (`isBreathingPause: true`).
+   - Skärmen och budskapsraden tonar mjukt ner, tömmer `messageQueue` och nollställer markerat läge så att deltagaren inte stressas av omedelbart nya krav.
 
 ## 2. Inblandade domäner
-- `src/features/aac_display/` (Komponenter: `AacDisplay.tsx`, `UserControlZone.tsx`, `SpeakerZoneView.tsx`, `AacTileItem.tsx`, hooks & affärsregler)
-- `src/features/live_listener/` (Tjänst: `liveListenerService.ts`, `diagnosticRecorder.ts`, typer & affärsregler)
+- `src/features/aac_display/` (`useAacDisplay.ts`, `UserControlZone.tsx`, `MessageBar.tsx`, `types.ts`, tester)
+- `src/features/live_listener/` (`liveListenerService.ts` - `sendTextImpulse`)
 
 ## 3. Tre fokuserade GROW-frågor mot faktiska risknoder
-1. **State & Layout (Sticky Floor & Rullningsfrihet)**: Hur implementeras Sticky Floor (5000ms grace period, 30s hard timeout, tidig release vid Rensa) och rullningsfri CSS (`h-screen overflow-hidden select-none`, `h-full min-h-0 flex-col`, ikoner `w-20`/`w-24`) utan att bryta befintliga gesture handlers eller ge layout-jitter?
-2. **Contract & Behavior (Gemini Live Silent Observer & NON_BLOCKING)**: Hur konfigureras `liveListenerService.ts` med den exakta Cognitive Observer `systemInstruction`, `behavior: "NON_BLOCKING"` på `update_topic_zones`, `sendRealtimeInput({ text })` och dubbel transkription utan att modellen genererar oönskat tal i rummet?
-3. **Resilience & Diagnostics (Fail Fast & 60s RAM Recorder)**: Hur byggs `diagnosticRecorder.ts` med 60 sekunders cirkulär buffert i minnet (events.json, display, kamera, PCM-ljud) och ZIP-paketering till `diagnostics_60s.zip`, och hur garanteras att `"SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)"` omedelbart syns i diagnostikraden vid start om nyckel saknas?
+1. **State & Flex-skalning (Risknod: State)**: Hur struktureras `messageQueue` i `useAacDisplay.ts` med tak på max 5 symboler och hur appliceras CSS Flexbox-skalningen (`w-24` -> `w-16`) i botten-dockan så att layouten förblir 100 % rullningsfri på både mobil och desktop?
+2. **Contract & TTS-separation (Risknod: Contract/Effects)**: Hur separeras privat provlyssning (klick på enskild symbol i budskapsraden med Typ A kryss) från offentlig röst (klick på Grön Bock som läser upp hela meningen och anropar `sendTextImpulse`), och hur mockas/styrs ljudsyntesen säkert i enhetstester?
+3. **Resilience & Timing (Risknod: Resilience)**: Hur styrs den 3000 ms andningspausen (`[RULE-008]`) med timer-rensning så att inga minnesläckor, race conditions eller oönskade tillståndsuppdateringar sker om komponenten avmonteras eller användaren klickar `[Rensa]`?
 
 ```json
 {
   "status": "IN_PROGRESS",
   "current_domain": "aac_display",
   "next_step": "1b_kartlagga",
-  "ticket_id": "TCK-010",
+  "ticket_id": "TCK-013",
   "active_skill": "gemini-live-api-dev"
 }
 ```

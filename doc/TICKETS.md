@@ -2,4 +2,4 @@
 
 | Ticket ID | Typ | Domän | Status | Beskrivning |
 | :--- | :--- | :--- | :--- | :--- |
-| TCK-012 | Bugfix / UI | aac_display | In Progress | Korrigering av layout och skärmutrymme: UserControlZone botten-docka, 80% samtalszon och permanenta trygghetsbrickor vid tystnad |
+| TCK-013 | Feature / UI | aac_display | In Progress | Elastisk Budskapsrad, Offentlig Röst & Post-Speech Reset (RULE-006, RULE-015, RULE-005, RULE-008) |
