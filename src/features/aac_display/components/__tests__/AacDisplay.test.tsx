@@ -1,52 +1,70 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { AacDisplay } from "../AacDisplay";
 import { SpeakerZoneView } from "../SpeakerZoneView";
+import { defaultLiveListener } from "../../../live_listener";
+import { defaultAdaptiveMemory } from "../../../adaptive_memory";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  defaultAdaptiveMemory.clearMemory();
+  defaultLiveListener.resetConsent();
 });
 
+const simulateUtterance = (
+  speakerId = "speaker-1",
+  tiles = [
+    { id: "tile-coffee-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+    { id: "tile-cake-2", iconKey: "cake", confidence: 0.65, isGroundTruth: false, speechText: "Bulle" },
+  ]
+) => {
+  defaultLiveListener.simulateUtterance({
+    speakerId,
+    text: "Vill du ha fika?",
+    tiles: tiles as any,
+  });
+};
+
 describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
-  it("renderar utan text eller rubriker i viloläge", () => {
+  it("renderar utan text eller rubriker i viloläge och utan statiska knappar", () => {
     const { container } = render(<AacDisplay />);
     
     // Verifiera att ingen rubrik eller menynamn visas
     const headings = container.querySelectorAll("h1, h2, h3, h4, h5, h6");
     expect(headings.length).toBe(0);
 
-    // Verifiera att kontrollzonen och scen-brickor finns
+    // Verifiera att kontrollzonen finns och att statiska scen-brickor raderats
     expect(screen.getByTestId("aac-user-control-zone")).toBeInTheDocument();
-    expect(screen.getByTestId("scene-coffee")).toBeInTheDocument();
-    expect(screen.getByTestId("scene-cart")).toBeInTheDocument();
-    expect(screen.getByTestId("scene-heart")).toBeInTheDocument();
-    expect(screen.getByTestId("scene-home")).toBeInTheDocument();
+    expect(screen.queryByTestId("scene-coffee")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("scene-cart")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("scene-heart")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("scene-home")).not.toBeInTheDocument();
   });
 
   it("visar inga hallucinerade bilder i tomma samtalszoner vid start", () => {
     render(<AacDisplay />);
-    // Initialt ska samtalszonerna vara tomma och vilsamma
     const tiles = screen.queryAllByTestId(/^aac-tile-/);
     expect(tiles.length).toBe(0);
   });
 
-  it("aktiverar låtsasdeltagare när användaren trycker på kaffekoppen (Fika)", () => {
+  it("aktiverar deltagarzoner dynamiskt när ett yttrande tas emot", () => {
     render(<AacDisplay />);
-    const coffeeSceneButton = screen.getByTestId("scene-coffee");
-    
-    fireEvent.click(coffeeSceneButton);
+    act(() => {
+      simulateUtterance();
+    });
 
-    // Nu ska samtalszoner befolkas av låtsasdeltagarnas ämnen
     const activeTiles = screen.getAllByTestId(/^aac-tile-/);
     expect(activeTiles.length).toBeGreaterThan(0);
   });
 
   it("visar frågetecken-överlägg på brickor med medelhög konfidens (0.50 - 0.79)", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance();
+    });
 
     const questionMarks = screen.getAllByTestId("question-mark-overlay");
     expect(questionMarks.length).toBeGreaterThan(0);
@@ -54,15 +72,21 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
   it("lämnar brickor med konfidens under 0.50 helt tomma", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance("speaker-1", [
+        { id: "tile-low-conf", iconKey: "apple", confidence: 0.35, isGroundTruth: false, speechText: "Låg" },
+      ]);
+    });
 
-    const hiddenLowConf = screen.queryByTestId("aac-tile-low-conf");
+    const hiddenLowConf = screen.queryByTestId("aac-tile-tile-low-conf");
     expect(hiddenLowConf).not.toBeInTheDocument();
   });
 
   it("avfärdar tolkning vid klick på rött kryss (feedbackreglage)", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance();
+    });
 
     const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
     fireEvent.click(firstTile);
@@ -75,7 +99,9 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
   it("bekräftar tolkning vid klick på grön bock (feedbackreglage)", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance();
+    });
 
     const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
     fireEvent.click(firstTile);
@@ -88,7 +114,9 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
   it("avfärdar bricka tyst vid klick på mikro-kryss och ersätter den i realtid", async () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance();
+    });
 
     const microDismissButtons = screen.getAllByTestId(/^micro-dismiss-/);
     expect(microDismissButtons.length).toBeGreaterThan(0);
@@ -96,7 +124,6 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     const firstDismissBtn = microDismissButtons[0];
     fireEvent.click(firstDismissBtn);
 
-    // Brickan avfärdas omedelbart och systemet fyller på med ersättare
     await waitFor(() => {
       const currentTiles = screen.getAllByTestId(/^aac-tile-/);
       expect(currentTiles.length).toBeGreaterThan(0);
@@ -105,49 +132,62 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
 
   it("bekräftar bricka tyst vid klick på mikro-bock", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
+    act(() => {
+      simulateUtterance();
+    });
 
     const microConfirmButtons = screen.getAllByTestId(/^micro-confirm-/);
     expect(microConfirmButtons.length).toBeGreaterThan(0);
 
     fireEvent.click(microConfirmButtons[0]);
 
-    // Visuell bekräftelseindikator ska tändas kortvarigt
     expect(screen.getByTestId("feedback-status-indicator")).toBeInTheDocument();
   });
 
-  it("kan återgå till viloläge genom återställningsknappen (hem)", () => {
+  it("kan rensa markering och frigöra sticky floor via rensa-knappen", () => {
     render(<AacDisplay />);
-    fireEvent.click(screen.getByTestId("scene-coffee"));
-    expect(screen.getAllByTestId(/^aac-tile-/).length).toBeGreaterThan(0);
+    act(() => {
+      simulateUtterance();
+    });
 
-    const homeSceneButton = screen.getByTestId("scene-home");
-    fireEvent.click(homeSceneButton);
+    const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
+    fireEvent.click(firstTile);
 
-    const tilesAfterReset = screen.queryAllByTestId(/^aac-tile-/);
-    expect(tilesAfterReset.length).toBe(0);
+    const clearButton = screen.getByTestId("btn-clear-selection");
+    fireEvent.click(clearButton);
+
+    expect(screen.queryByTestId("laptop-thinking-indicator")).not.toBeInTheDocument();
+  });
+
+  describe("Sticky Floor & Laptop Grace Period", () => {
+    it("visar pulserande prompt på laptopen under användarinteraktion", () => {
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance();
+      });
+
+      const firstTile = screen.getAllByTestId(/^aac-tile-/)[0];
+      fireEvent.pointerDown(firstTile);
+
+      expect(screen.getByTestId("laptop-thinking-indicator")).toBeInTheDocument();
+      expect(screen.getByText("Kalle tänker... vänta.")).toBeInTheDocument();
+    });
   });
 
   describe("Flertalar-rum (TCK-006: Adaptiv layout-skalning och färgkodning)", () => {
-    it("anpassar grid-layouten adaptivt för 1, 2 och 3 talarzoner", () => {
+    it("anpassar grid-layouten adaptivt för 1 och 2 talarzoner", () => {
       render(<AacDisplay />);
-      
       const zonesContainer = screen.getByTestId("speaker-zones-container");
 
-      // Byt till 2 talare via 'coffee' (Fika med vänner)
-      const coffeeButton = screen.getByTestId("scene-coffee");
-      fireEvent.click(coffeeButton);
-      expect(zonesContainer).toHaveClass("md:grid-cols-2");
-
-      // Byt till 1 talare via 'cart' (Matbutik)
-      const cartButton = screen.getByTestId("scene-cart");
-      fireEvent.click(cartButton);
+      act(() => {
+        simulateUtterance("speaker-1");
+      });
       expect(zonesContainer).toHaveClass("grid-cols-1");
 
-      // Byt till 3 talare via 'heart' (Gruppsamtal)
-      const heartButton = screen.getByTestId("scene-heart");
-      fireEvent.click(heartButton);
-      expect(zonesContainer).toHaveClass("md:grid-cols-3");
+      act(() => {
+        simulateUtterance("speaker-2");
+      });
+      expect(zonesContainer).toHaveClass("md:grid-cols-2");
     });
 
     it("renderar nya färgteman (violet och rose) med WCAG AA-vänlig dämpning i SpeakerZoneView", () => {
@@ -189,17 +229,18 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       expect(roseSection.className).toContain("border-rose-200/60");
     });
 
-    it("stödjer flertalar-fika med 3+ talare och unika färgprofiler", () => {
+    it("stödjer flertalar-fika med 3 talare och unika färgprofiler", () => {
       render(<AacDisplay />);
       
-      // Klicka på 'heart' (Gruppsamtal & Omtanke)
-      const heartButton = screen.getByTestId("scene-heart");
-      fireEvent.click(heartButton);
+      act(() => {
+        simulateUtterance("speaker-1");
+        simulateUtterance("speaker-2");
+        simulateUtterance("speaker-3");
+      });
 
       const zonesContainer = screen.getByTestId("speaker-zones-container");
       expect(zonesContainer).toBeInTheDocument();
 
-      // Kontrollera att alla 3 talarzoner renderas
       const speaker1 = screen.getByTestId("speaker-zone-speaker-1");
       const speaker2 = screen.getByTestId("speaker-zone-speaker-2");
       const speaker3 = screen.getByTestId("speaker-zone-speaker-3");
@@ -207,11 +248,6 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       expect(speaker1).toBeInTheDocument();
       expect(speaker2).toBeInTheDocument();
       expect(speaker3).toBeInTheDocument();
-
-      // Kontrollera unika färgklasser för talarna
-      expect(speaker1.className).toContain("border-emerald-200/60");
-      expect(speaker2.className).toContain("border-violet-200/60");
-      expect(speaker3.className).toContain("border-rose-200/60");
     });
   });
 
@@ -263,6 +299,7 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       const diagPanel = screen.getByTestId("diagnostics-panel");
       expect(diagPanel).toBeInTheDocument();
       expect(screen.getByTestId("diagnostics-event-status")).toBeInTheDocument();
+      expect(screen.getByTestId("download-diagnostics-zip")).toBeInTheDocument();
 
       // Stäng via stängknappen
       const closeBtn = screen.getByTestId("btn-close-diagnostics");

@@ -1,7 +1,9 @@
 import { Mic } from "lucide-react";
 import { useAacDisplay } from "../hooks/useAacDisplay";
+import { useStickyFloor } from "../hooks/useStickyFloor";
 import { SpeakerZoneView } from "./SpeakerZoneView";
 import { UserControlZone } from "./UserControlZone";
+import { AacTile } from "../domain/types";
 
 export function AacDisplay() {
   const {
@@ -11,13 +13,26 @@ export function AacDisplay() {
     connectionStatus,
     lastEventStatus,
     selectScenario,
-    handleSelectTile,
+    handleSelectTile: baseHandleSelectTile,
     handleConfirm,
     handleReject,
+    handleClear: baseHandleClear,
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,
   } = useAacDisplay();
+
+  const stickyFloor = useStickyFloor();
+
+  const handleSelectTile = (tile: AacTile) => {
+    stickyFloor.startInteraction();
+    baseHandleSelectTile(tile);
+  };
+
+  const handleClear = () => {
+    baseHandleClear();
+    stickyFloor.releaseGracePeriod();
+  };
 
   const zoneCount = state.speakerZones.length;
   const gridLayoutClass = (() => {
@@ -30,15 +45,32 @@ export function AacDisplay() {
   return (
     <main
       data-testid="aac-display-root"
-      className="min-h-screen w-full bg-stone-100 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 select-none"
+      onTouchStart={stickyFloor.startInteraction}
+      onTouchEnd={stickyFloor.endInteraction}
+      onPointerDown={stickyFloor.startInteraction}
+      onPointerUp={stickyFloor.endInteraction}
+      className={`h-screen max-h-screen overflow-hidden w-full bg-stone-100 flex flex-col lg:flex-row gap-5 p-4 select-none relative ${
+        stickyFloor.isUserInteracting ? "ring-4 ring-amber-400/60" : ""
+      }`}
     >
-      {/* Samtalszoner till vänster för identifierade eller virtuella talare */}
+      {/* Laptop pulserande statusram under Sticky Floor Grace Period */}
+      {stickyFloor.thinkingPrompt && (
+        <div
+          data-testid="laptop-thinking-indicator"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-40 px-6 py-2.5 rounded-full bg-stone-900/90 text-amber-300 border-2 border-amber-400/80 shadow-2xl animate-pulse font-medium text-sm flex items-center gap-2.5 backdrop-blur-sm pointer-events-none"
+        >
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+          <span>{stickyFloor.thinkingPrompt}</span>
+        </div>
+      )}
+
+      {/* Samtalszoner till vänster för identifierade talare */}
       <div
         data-testid="speaker-zones-container"
-        className={`flex-1 ${
+        className={`flex-1 h-full min-h-0 ${
           zoneCount === 0
-            ? "flex items-center justify-center rounded-3xl border border-dashed border-stone-200/80 bg-stone-50/40 p-8 min-h-[320px]"
-            : `grid ${gridLayoutClass} gap-5`
+            ? "flex items-center justify-center rounded-3xl border border-dashed border-stone-200/80 bg-stone-50/40 p-8"
+            : `grid ${gridLayoutClass} gap-5 overflow-hidden`
         } transition-all duration-300`}
       >
         {zoneCount === 0 ? (
@@ -65,7 +97,7 @@ export function AacDisplay() {
         )}
       </div>
 
-      {/* Afasideltagarens dedikerade kontrollzon med scen-brickor och feedback */}
+      {/* Afasideltagarens dedikerade kontrollzon med feedback, rensa och mikrofon */}
       <UserControlZone
         activeScenarioId={state.activeScenarioId}
         hasSelectedTile={Boolean(selectedTile)}
@@ -76,6 +108,7 @@ export function AacDisplay() {
         onSelectScenario={selectScenario}
         onConfirm={handleConfirm}
         onReject={handleReject}
+        onClear={handleClear}
         onToggleListening={toggleListening}
       />
     </main>

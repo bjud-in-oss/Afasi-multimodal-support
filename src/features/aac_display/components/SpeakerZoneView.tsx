@@ -30,10 +30,10 @@ export function SpeakerZoneView({
   return (
     <section
       data-testid={`speaker-zone-${zone.id}`}
-      className={`flex-1 p-5 rounded-3xl border flex flex-col transition-all duration-500 ${themeStyles} ${activePulse}`}
+      className={`flex-1 h-full min-h-0 p-5 rounded-3xl border flex flex-col transition-all duration-500 select-none ${themeStyles} ${activePulse}`}
     >
       {/* Rutnät för samtalsbrickor - helt utan rubriktext */}
-      <div className="flex-1 grid grid-cols-2 gap-4 place-content-start">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 place-content-start overflow-hidden">
         {zone.tiles.map((tile) => (
           <AacTileItem
             key={tile.id}

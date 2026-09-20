@@ -39,7 +39,7 @@ export function AacTileItem({
   const needsClarification = tile.confidence >= 0.5 && tile.confidence < 0.8;
 
   const renderIcon = () => {
-    const props = { className: "w-12 h-12 stroke-[1.75]" };
+    const props = { className: "w-20 h-20 sm:w-24 sm:h-24 stroke-[1.75]" };
     switch (tile.iconKey) {
       case "coffee":
         return <Coffee {...props} />;

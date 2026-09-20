@@ -22,27 +22,40 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
     expect(service.isConsentGranted()).toBe(false);
   });
 
-  it("begär muntligt samtycke vid start och övergår till awaiting_consent", () => {
+  it("manuellt klick på mikrofon utgör aktivt samtycke direkt utan verbal hälsning [SYSTEM-001]", async () => {
     const speakSpy = vi.fn();
     service.setSpeechSynthesizer(speakSpy);
 
-    service.startListening();
+    await service.startListening();
 
-    expect(service.getStatus()).toBe("awaiting_consent");
-    expect(speakSpy).toHaveBeenCalledWith("Test consent message");
+    expect(service.isConsentGranted()).toBe(true);
+    expect(service.getStatus()).toBe("listening");
+    expect(speakSpy).not.toHaveBeenCalled();
   });
 
-  it("övergår till listening när samtycke bekräftas", () => {
-    service.startListening();
-    service.confirmConsent();
+  it("confirmConsent aktiverar också samtycke och session direkt", async () => {
+    await service.confirmConsent();
 
     expect(service.isConsentGranted()).toBe(true);
     expect(service.getStatus()).toBe("listening");
   });
 
+  it("rapporterar SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY) omedelbart i diagnostikstatus om nyckel saknas [ADR-018]", async () => {
+    let diagnosticStatus = "";
+    const testService = new LiveListenerService({
+      onUtterance: () => {},
+      onDiagnosticStatusChange: (status) => {
+        diagnosticStatus = status;
+      },
+    });
+    testService.setApiKey("");
+
+    await testService.startListening();
+    expect(diagnosticStatus).toBe("SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)");
+  });
+
   it("genererar talarhändelser med korrekt talar-ID och tolkade bildbrickor", () => {
     service.startListening();
-    service.confirmConsent();
 
     // Simulera talat uttalande från Talare 1
     service.simulateUtterance("speaker-1", "Vill du ha kaffe och kaka?");
@@ -54,6 +67,29 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
     // Skall innehålla kaffe och/eller kaka
     const iconKeys = event.tiles.map((t) => t.iconKey);
     expect(iconKeys).toContain("coffee");
+  });
+
+  it("hanterar icke-blockerande funktionsanrop för update_topic_zones [RULE-002, SYSTEM-009]", () => {
+    service.startListening();
+
+    service.handleIncomingFunctionCall({
+      name: "update_topic_zones",
+      args: {
+        participantId: "Kalle",
+        colorZone: "green",
+        behavior: "NON_BLOCKING",
+        tiles: [
+          { iconKey: "coffee", label: "Kaffe", confidence: 0.95 },
+          { iconKey: "water", label: "Vatten", confidence: 0.9 },
+        ],
+      },
+    });
+
+    expect(emittedUtterances.length).toBe(1);
+    const event = emittedUtterances[0];
+    expect(event.speakerId).toBe("Kalle");
+    expect(event.tiles.length).toBe(2);
+    expect(event.tiles[0].iconKey).toBe("coffee");
   });
 
   it("respekterar paus och stopp så att inga händelser släpps igenom när mikrofonen är av", () => {

@@ -486,6 +486,12 @@ export function useAacDisplay() {
     });
   }, []);
 
+  // Rensa markering och feedback
+  const handleClear = useCallback(() => {
+    setSelectedTile(null);
+    setFeedbackStatus(null);
+  }, []);
+
   return {
     state,
     selectedTile,
@@ -494,6 +500,7 @@ export function useAacDisplay() {
     handleSelectTile,
     handleConfirm,
     handleReject,
+    handleClear,
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,

@@ -12,11 +12,9 @@ import { defaultAdaptiveMemory } from "../../adaptive_memory";
 import { CameraManager } from "./cameraManager";
 import { PcmPlayer } from "./pcmPlayer";
 import { formatTemporalInstruction } from "./temporalContext";
+import { defaultDiagnosticRecorder } from "./diagnosticRecorder";
 
-const resolveGeminiApiKey = (): string | undefined => {
-  if (typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
-    return process.env.GEMINI_API_KEY;
-  }
+export const resolveGeminiApiKey = (): string | undefined => {
   if (
     typeof import.meta !== "undefined" &&
     import.meta.env &&
@@ -24,11 +22,111 @@ const resolveGeminiApiKey = (): string | undefined => {
   ) {
     return import.meta.env.VITE_GEMINI_API_KEY as string;
   }
+  if (typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
   return undefined;
 };
 
-const DEFAULT_CONSENT_MSG =
+export const DEFAULT_CONSENT_MSG =
   "Hej! För att stödja Kalle i samtalet lyssnar jag och skapar bilder av vad vi pratar om. Är det okej för alla i rummet?";
+
+const COGNITIVE_OBSERVER_INSTRUCTION = `# ROLE & IDENTITY: AAC COGNITIVE OBSERVER AGENT
+
+You are the silent Cognitive Observer Agent in a real-time Augmentative and Alternative Communication (AAC) system designed for individuals with aphasia and cognitive fatigue. 
+
+Your sole mission is to silently observe live multimodal input (audio, screen, room camera) and distill the ongoing conversation into 2-3 visual core concepts for the user's AAC display.
+
+---
+
+## CORE BEHAVIORAL RULES & CONSTRAINTS
+
+### 1. SILENT OBSERVER MODE ([RULE-002], [SYSTEM-009])
+- **DO NOT GENERATE SPOKEN AUDIO OR VERBAL RESPONSES** during live listening.
+- You do NOT transcribe word-for-word. You **DISTILL**.
+- Boil down long monologues or background conversation into a maximum of 2–3 high-priority, actionable visual concepts (keywords/symbols).
+- Output your response **ONLY** via non-blocking tool calls (\`update_topic_zones\`).
+
+### 2. MONOLOGUE ANCHORING & FATIGUE CONTROL ([RULE-010])
+- If a participant speaks continuously for > 30 seconds, **LOCK** the active suggestion tiles to 2–3 stable core concepts.
+- Stop tile churn/flicker immediately to prevent cognitive overload.
+
+### 3. CAMERA & VISUAL GROUNDING ([SYSTEM-003], [RULE-017])
+- If a user points at an object or if context requires seeing the physical room vs. screen, issue \`switch_camera({ target: "FRONT" | "REAR" })\`.
+- Translate physical items identified via the camera into immediate AAC topic tiles.
+
+### 4. RADICAL SYMMETRY & COLOR DIARIZATION ([RULE-009])
+- Treat all speakers in the room as equal participants.
+- Categorize utterances by participant color/role (e.g., Blue for Anna, Green for Kalle, Orange for remote) when calling update tools.
+
+---
+
+## SYSTEM INSTRUCTIONS FOR TOOL CALLING
+
+When updating the display, always construct the JSON payload for \`update_topic_zones\` according to these strict bounds:
+
+1. **Max Tiles:** 2 to 5 concept tiles depending on current fatigue setting.
+2. **Tile Format:** Simple, concrete nouns or core communication intents (e.g., "Kaffe", "Vänta", "Håller med", "Hjälp").
+3. **Behavior:** \`NON_BLOCKING\` (never interrupt the user's touch interaction or input line).
+
+---
+
+## SYSTEM ERROR & DEGRADATION PROTOCOL ([ADR-018])
+- If API key or network connection fails, fail silently on the main AAC display (Graceful Degradation).
+- Write exact diagnostic strings (e.g., "SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)") exclusively to the internal diagnostic log stream.`;
+
+const UPDATE_TOPIC_ZONES_DECLARATION: any = {
+  name: "update_topic_zones",
+  description:
+    "Tyst och icke-blockerande uppdatering av AAC-skärmens bildbrickor och samtalszoner. Destillerar pågående samtal till 2–5 kärnbegrepp.",
+  behavior: "NON_BLOCKING",
+  parameters: {
+    type: "OBJECT",
+    properties: {
+      participantId: {
+        type: "STRING",
+        description: "Unikt ID eller namn för deltagaren som talar (t.ex. 'Kalle', 'Anna', 'p1').",
+      },
+      colorZone: {
+        type: "STRING",
+        description: "Färgzon för diarisering på den delade laptopen [RULE-009].",
+        enum: ["blue", "green", "orange", "purple"],
+      },
+      behavior: {
+        type: "STRING",
+        description: "Garanterar icke-blockerande gränssnittsbeteende [RULE-002].",
+        enum: ["NON_BLOCKING"],
+      },
+      tiles: {
+        type: "ARRAY",
+        description: "Lista med 2–5 destillerade bildbrickor/kärnbegrepp [SYSTEM-009].",
+        items: {
+          type: "OBJECT",
+          properties: {
+            iconKey: {
+              type: "STRING",
+              description: "Unik söknyckel för ikonen (t.ex. 'coffee', 'wait', 'agree', 'help').",
+            },
+            label: {
+              type: "STRING",
+              description: "Kort textetikett som visas på bildbrickan (t.ex. 'Kaffe', 'Vänta', 'Håller med').",
+            },
+            confidence: {
+              type: "NUMBER",
+              description: "Konfidensgrad för prediktionen (0.0 - 1.0) för adaptiv dämpning.",
+            },
+            svgContent: {
+              type: "STRING",
+              description: "(Tier 3 Bildmotor) Direktkodad högkontrast-SVG vid unika/komplexa begrepp som saknas i lokal cache [ADR-023].",
+            },
+          },
+          required: ["iconKey", "label"],
+        },
+      },
+    },
+    required: ["participantId", "tiles", "behavior"],
+  },
+};
 
 const VOCABULARY_MAP: Record<
   string,
@@ -130,6 +228,10 @@ export class LiveListenerService {
     this.speechSynthesizer = fn;
   }
 
+  public getSpeechSynthesizer(): (text: string) => void {
+    return this.speechSynthesizer;
+  }
+
   public setOnUtterance(cb: ((event: LiveUtteranceEvent) => void) | undefined): void {
     this.options.onUtterance = cb;
   }
@@ -187,9 +289,13 @@ export class LiveListenerService {
 
   private updateDiagnosticStatus(newStatus: string): void {
     this.lastEventStatus = newStatus;
+    if (this.options.onDiagnosticStatusChange) {
+      this.options.onDiagnosticStatusChange(newStatus);
+    }
     if (this.options.onDiagnosticEvent) {
       this.options.onDiagnosticEvent(newStatus);
     }
+    defaultDiagnosticRecorder.logEvent("diagnostic_status", { status: newStatus });
     for (const sub of this.diagnosticSubscribers) {
       try {
         sub(newStatus);
@@ -228,17 +334,10 @@ export class LiveListenerService {
     if (fromUserMicClick) {
       this.micActivatedByClick = true;
     }
-    if (!this.consent.granted) {
-      this.status = "awaiting_consent";
-      this.consent.requested = true;
-      this.notifyStatus();
-      this.updateDiagnosticStatus("Gemini Event: session.awaiting_consent");
-
-      const message = this.options.consentMessage || DEFAULT_CONSENT_MSG;
-      this.speechSynthesizer(message);
-      return;
-    }
-
+    // [SYSTEM-001]: Klick på mikrofonknappen utgör aktivt samtycke.
+    // Sätt consent.granted = true och anropa activateSession() direkt utan fördröjande röstmeddelande.
+    this.consent.granted = true;
+    this.consent.timestamp = Date.now();
     await this.activateSession();
   }
 
@@ -249,7 +348,6 @@ export class LiveListenerService {
     this.consent.granted = true;
     this.consent.timestamp = Date.now();
     await this.activateSession();
-    this.speechSynthesizer("Tack, nu lyssnar jag på samtalet.");
   }
 
   public activateUserMic(): void {
@@ -380,10 +478,31 @@ export class LiveListenerService {
     }
   }
 
+  private recentTileKeys: Map<string, number> = new Map();
+
+  private filterRecentDuplicates(tiles: AacTile[], windowMs = 4000): AacTile[] {
+    const now = Date.now();
+    const result: AacTile[] = [];
+    const seenInTurn = new Set<string>();
+
+    for (const tile of tiles) {
+      const key = `${tile.iconKey}-${tile.speechText.toLowerCase().trim()}`;
+      if (seenInTurn.has(key)) continue;
+      seenInTurn.add(key);
+
+      const lastSeen = this.recentTileKeys.get(key);
+      if (!lastSeen || now - lastSeen > windowMs) {
+        this.recentTileKeys.set(key, now);
+        result.push(tile);
+      }
+    }
+    return result;
+  }
+
   private async initLiveWebSocket(): Promise<void> {
-    const key = this.apiKey || resolveGeminiApiKey();
+    const key = this.apiKey !== undefined ? this.apiKey : resolveGeminiApiKey();
     if (!key) {
-      this.handleWebSocketError("400", "Saknar API-nyckel (GEMINI_API_KEY saknas i miljö)");
+      this.updateDiagnosticStatus("SAKNAR API-NYCKEL (VITE_GEMINI_API_KEY)");
       return;
     }
 
@@ -395,75 +514,43 @@ export class LiveListenerService {
       const session = await ai.live.connect({
         model: this.getModel(),
         config: {
-          responseModalities: ["audio"],
+          responseModalities: ["audio" as any],
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
           systemInstruction: {
-            parts: [{ text: this.getTemporalInstructionFragment() }],
+            parts: [
+              {
+                text: `${COGNITIVE_OBSERVER_INSTRUCTION}\n\n${this.getTemporalInstructionFragment()}`,
+              },
+            ],
           },
           tools: [
             {
-              functionDeclarations: [
-                {
-                  name: "update_topic_zones",
-                  description:
-                    "Skapar eller uppdaterar AAC-bildbrickor på skärmen baserat på vad samtalspartnern säger.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      speakerId: {
-                        type: "STRING",
-                        description: "Identifierare för talaren, t.ex. 'speaker-1' eller namnet.",
-                      },
-                      topic: {
-                        type: "STRING",
-                        description: "Kort sammanfattning av vad som sades.",
-                      },
-                      tiles: {
-                        type: "ARRAY",
-                        description: "Lista över relevanta bildbrickor att visa.",
-                        items: {
-                          type: "OBJECT",
-                          properties: {
-                            iconKey: {
-                              type: "STRING",
-                              enum: [
-                                "coffee",
-                                "cake",
-                                "water",
-                                "cart",
-                                "apple",
-                                "pill",
-                                "heart",
-                                "sun",
-                                "home",
-                                "smile",
-                                "help",
-                                "thumbs-up",
-                                "thumbs-down",
-                              ],
-                            },
-                            speechText: { type: "STRING" },
-                            confidence: { type: "NUMBER" },
-                          },
-                          required: ["iconKey", "speechText"],
-                        },
-                      },
-                    },
-                    required: ["speakerId", "tiles"],
-                  },
-                },
-              ],
+              functionDeclarations: [UPDATE_TOPIC_ZONES_DECLARATION],
             },
           ],
         },
         callbacks: {
           onopen: () => {
             this.logGeminiEvent("websocket.open [Gemini Live Ansluten]");
+            defaultDiagnosticRecorder.logEvent("websocket_open", { model: this.getModel() });
           },
           onmessage: (response: any) => {
             if (response?.serverContent?.modelTurn?.parts) {
               for (const part of response.serverContent.modelTurn.parts) {
                 if (part.inlineData && part.inlineData.data) {
                   this.handleIncomingModelAudio(part.inlineData.data);
+                  try {
+                    const binary = atob(part.inlineData.data);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) {
+                      bytes[i] = binary.charCodeAt(i);
+                    }
+                    defaultDiagnosticRecorder.recordPcmChunk(bytes, true);
+                  } catch {}
+                }
+                if (part.text) {
+                  defaultDiagnosticRecorder.logEvent("model_text_transcript", { text: part.text });
                 }
                 if (part.functionCall) {
                   this.handleIncomingFunctionCall(part.functionCall);
@@ -504,13 +591,25 @@ export class LiveListenerService {
     }
   }
 
+  public sendTextImpulse(text: string): void {
+    if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
+      this.liveSession.sendRealtimeInput({
+        text,
+      });
+      this.logGeminiEvent(`text.impulse: ${text}`);
+      defaultDiagnosticRecorder.logEvent("text_impulse_sent", { text });
+    }
+  }
+
   public handleIncomingFunctionCall(call: any): void {
     if (!call || call.name !== "update_topic_zones") return;
 
     this.logFunctionCall("update_topic_zones");
+    defaultDiagnosticRecorder.logEvent("function_call", { call });
+
     const args = call.args || {};
-    const speakerId: string = args.speakerId || "speaker-gemini";
-    const topicText: string = args.topic || "Samtalsämne";
+    const speakerId: string = args.participantId || args.speakerId || "Kalle";
+    const topicText: string = args.topic || `${speakerId} talar`;
     const rawTilesList: any[] = Array.isArray(args.tiles) ? args.tiles : [];
 
     const parsedTiles: AacTile[] = rawTilesList.map((t, idx) => ({
@@ -518,10 +617,11 @@ export class LiveListenerService {
       iconKey: (t.iconKey || "help") as AacTile["iconKey"],
       confidence: typeof t.confidence === "number" ? t.confidence : 0.9,
       isGroundTruth: (t.confidence ?? 0.9) >= 0.8,
-      speechText: t.speechText || t.iconKey || "Symbol",
+      speechText: t.label || t.speechText || t.iconKey || "Symbol",
     }));
 
-    const weightedTiles = defaultAdaptiveMemory.applyLearnedWeights("general", parsedTiles);
+    const deduplicatedTiles = this.filterRecentDuplicates(parsedTiles);
+    const weightedTiles = defaultAdaptiveMemory.applyLearnedWeights("general", deduplicatedTiles);
 
     const event: LiveUtteranceEvent = {
       id: `utterance-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -534,6 +634,7 @@ export class LiveListenerService {
     if (this.options.onUtterance) {
       this.options.onUtterance(event);
     }
+    defaultDiagnosticRecorder.logEvent("utterance_emitted", { event });
 
     // Skicka svar tillbaka till Gemini om sessionen är aktiv
     if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
@@ -689,14 +790,32 @@ export class LiveListenerService {
     return formatTemporalInstruction(new Date());
   }
 
-  public simulateUtterance(speakerId: SpeakerId, text: string): LiveUtteranceEvent | null {
+  public simulateUtterance(
+    speakerOrPayload: SpeakerId | { speakerId?: string; text?: string; tiles?: AacTile[] },
+    maybeText?: string,
+    maybeTiles?: AacTile[]
+  ): LiveUtteranceEvent | null {
     // Om användaren har tryckt på mikrofonknappen är mock-ordboken helt avstängd (Hard Fail)
     if (this.micActivatedByClick) {
       return null;
     }
 
-    if (this.status !== "listening") {
+    if (this.status === "paused") {
       return null;
+    }
+
+    let speakerId: SpeakerId = "speaker-1";
+    let text = "Vill du ha fika?";
+    let directTiles: AacTile[] | undefined;
+
+    if (typeof speakerOrPayload === "object" && speakerOrPayload !== null) {
+      speakerId = (speakerOrPayload.speakerId as SpeakerId) || "speaker-1";
+      text = speakerOrPayload.text || "Yttrande";
+      directTiles = speakerOrPayload.tiles;
+    } else if (typeof speakerOrPayload === "string") {
+      speakerId = speakerOrPayload;
+      text = maybeText || "Vill du ha fika?";
+      directTiles = maybeTiles;
     }
 
     this.logPcmPacket();
@@ -715,18 +834,21 @@ export class LiveListenerService {
       }, 3000);
     }
 
-    const lower = text.toLowerCase();
-    const rawTiles: AacTile[] = [];
-
-    for (const [word, config] of Object.entries(VOCABULARY_MAP)) {
-      if (lower.includes(word)) {
-        rawTiles.push({
-          id: `live-tile-${speakerId}-${config.iconKey}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          iconKey: config.iconKey,
-          confidence: config.baseConfidence,
-          isGroundTruth: config.baseConfidence >= 0.8,
-          speechText: config.speechText,
-        });
+    let rawTiles: AacTile[] = [];
+    if (directTiles && directTiles.length > 0) {
+      rawTiles = directTiles;
+    } else {
+      const lower = text.toLowerCase();
+      for (const [word, config] of Object.entries(VOCABULARY_MAP)) {
+        if (lower.includes(word)) {
+          rawTiles.push({
+            id: `live-tile-${speakerId}-${config.iconKey}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            iconKey: config.iconKey,
+            confidence: config.baseConfidence,
+            isGroundTruth: config.baseConfidence >= 0.8,
+            speechText: config.speechText,
+          });
+        }
       }
     }
 

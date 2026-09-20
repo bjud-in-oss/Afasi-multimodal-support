@@ -80,5 +80,6 @@ export interface ListenerOptions {
   onCameraStatusChange?: (status: CameraStatus) => void;
   onActiveSpeakerChange?: (speakerId: SpeakerId | null) => void;
   onDiagnosticEvent?: (status: string) => void;
+  onDiagnosticStatusChange?: (status: string) => void;
   consentMessage?: string;
 }

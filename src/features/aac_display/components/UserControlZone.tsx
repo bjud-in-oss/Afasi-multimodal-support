@@ -1,42 +1,42 @@
 import { useState, useRef } from "react";
 import {
-  Coffee,
-  ShoppingCart,
-  Heart,
-  Home,
   Check,
   X,
   Mic,
   MicOff,
+  RotateCcw,
+  Download,
 } from "lucide-react";
+import { defaultDiagnosticRecorder } from "../../live_listener/domain/diagnosticRecorder";
 
 interface UserControlZoneProps {
-  activeScenarioId: string | null;
+  activeScenarioId?: string | null;
   hasSelectedTile: boolean;
   isListening: boolean;
   connectionStatus?: "disconnected" | "connecting" | "active";
   lastEventStatus?: string;
   feedbackStatus: "confirmed" | "rejected" | null;
-  onSelectScenario: (key: "coffee" | "cart" | "heart" | "home") => void;
+  onSelectScenario?: (key: "coffee" | "cart" | "heart" | "home") => void;
   onConfirm: () => void;
   onReject: () => void;
+  onClear?: () => void;
   onToggleListening: () => void;
 }
 
 export function UserControlZone({
-  activeScenarioId,
   hasSelectedTile,
   isListening,
   connectionStatus = "disconnected",
   lastEventStatus = "Frånkopplad (Väntar på aktivering)",
   feedbackStatus,
-  onSelectScenario,
   onConfirm,
   onReject,
+  onClear,
   onToggleListening,
 }: UserControlZoneProps) {
   // Dold diagnostikpanel för felsökning av Gemini Live utan att störa det kognitiva AAC-gränssnittet
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [isExportingZip, setIsExportingZip] = useState<boolean>(false);
   const lastTapRef = useRef<number>(0);
 
   // Dubbelklick eller snabbt dubbeltryck på statuspricken växlar diagnostikpanelen
@@ -53,65 +53,42 @@ export function UserControlZone({
     e.stopPropagation();
     setShowDiagnostics((prev) => !prev);
   };
+
+  const handleDownloadZip = async () => {
+    try {
+      setIsExportingZip(true);
+      await defaultDiagnosticRecorder.triggerDownload();
+    } catch (err) {
+      console.error("Fel vid nedladdning av diagnostik-ZIP:", err);
+    } finally {
+      setIsExportingZip(false);
+    }
+  };
+
   return (
     <aside
       data-testid="aac-user-control-zone"
-      className="w-full lg:w-80 p-5 rounded-3xl border border-stone-300/80 bg-stone-100/90 flex flex-col gap-5 shadow-sm"
+      className="w-full lg:w-80 h-full min-h-0 p-5 rounded-3xl border border-stone-300/80 bg-stone-100/90 flex flex-col gap-5 shadow-sm select-none"
     >
-      {/* 1. Scen-brickor för att initiera låtsassamtal utan menyer eller text */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          data-testid="scene-coffee"
-          onClick={() => onSelectScenario("coffee")}
-          aria-label="Fika"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "coffee"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <Coffee className="w-8 h-8 stroke-[1.75]" />
-        </button>
-
-        <button
-          type="button"
-          data-testid="scene-cart"
-          onClick={() => onSelectScenario("cart")}
-          aria-label="Handla"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "cart"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <ShoppingCart className="w-8 h-8 stroke-[1.75]" />
-        </button>
-
-        <button
-          type="button"
-          data-testid="scene-heart"
-          onClick={() => onSelectScenario("heart")}
-          aria-label="Hälsa"
-          className={`p-4 aspect-square rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-            activeScenarioId === "heart"
-              ? "bg-stone-900 text-white border-stone-900 shadow-md scale-[1.02]"
-              : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-          }`}
-        >
-          <Heart className="w-8 h-8 stroke-[1.75]" />
-        </button>
-
-        <button
-          type="button"
-          data-testid="scene-home"
-          onClick={() => onSelectScenario("home")}
-          aria-label="Vila och återställ"
-          className="p-4 aspect-square rounded-2xl border bg-white text-stone-700 border-stone-200 hover:bg-stone-50 flex items-center justify-center transition-all cursor-pointer"
-        >
-          <Home className="w-8 h-8 stroke-[1.75]" />
-        </button>
-      </div>
+      {/* 1. Snabb-release och rensning av markering */}
+      {onClear && (
+        <div>
+          <button
+            type="button"
+            data-testid="btn-clear-selection"
+            onClick={onClear}
+            disabled={!hasSelectedTile}
+            aria-label="Rensa markering"
+            className={`w-full py-4 rounded-2xl border flex items-center justify-center transition-all ${
+              hasSelectedTile
+                ? "bg-white text-stone-700 border-stone-300 hover:bg-stone-50 shadow-sm cursor-pointer active:scale-95"
+                : "bg-stone-200/50 text-stone-300 border-stone-200/60 cursor-not-allowed"
+            }`}
+          >
+            <RotateCcw className="w-7 h-7 stroke-[2]" />
+          </button>
+        </div>
+      )}
 
       {/* 2. Feedbackreglage: Grön bock och Rött kryss för successiv inlärning */}
       <div className="flex gap-3 pt-2 border-t border-stone-200/80">
@@ -186,7 +163,7 @@ export function UserControlZone({
           {/* Visuell statussymbol för Gemini Live-anslutning:
               - Röd/Grå punkt: Frånkopplad / Inget API-svar
               - Gul punkt: Ansluter till Gemini Live...
-              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar efter samtal/väckningsord ("Maggan")
+              - Grön pulserande punkt: Live-anslutning aktiv och lyssnar
               - Dubbelklick/tryck: Växlar dold diagnostikpanel */}
           <span
             data-testid="live-status-dot"
@@ -216,7 +193,7 @@ export function UserControlZone({
       {showDiagnostics && (
         <div
           data-testid="diagnostics-panel"
-          className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 text-emerald-400 border-t border-stone-800 px-4 py-2 font-mono text-xs flex items-center justify-between shadow-2xl backdrop-blur-md select-text"
+          className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 text-emerald-400 border-t border-stone-800 px-4 py-2.5 font-mono text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xl backdrop-blur-md select-text"
         >
           <div className="flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
             <span
@@ -235,20 +212,34 @@ export function UserControlZone({
             <span className="text-stone-600">|</span>
             <span
               data-testid="diagnostics-event-status"
-              className="text-stone-300 truncate"
+              className="text-stone-300 truncate max-w-xs md:max-w-md"
             >
               {lastEventStatus}
             </span>
           </div>
-          <button
-            type="button"
-            data-testid="btn-close-diagnostics"
-            onClick={() => setShowDiagnostics(false)}
-            className="ml-4 px-2 py-0.5 rounded text-stone-400 hover:text-white hover:bg-stone-800 text-xs transition-colors cursor-pointer"
-            aria-label="Stäng diagnostik"
-          >
-            ✕
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              data-testid="download-diagnostics-zip"
+              onClick={handleDownloadZip}
+              disabled={isExportingZip}
+              className="px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExportingZip ? "Genererar ZIP..." : "Ladda ned Felsöknings-ZIP (60s)"}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="btn-close-diagnostics"
+              onClick={() => setShowDiagnostics(false)}
+              className="px-2 py-0.5 rounded text-stone-400 hover:text-white hover:bg-stone-800 text-xs transition-colors cursor-pointer"
+              aria-label="Stäng diagnostik"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
     </aside>
