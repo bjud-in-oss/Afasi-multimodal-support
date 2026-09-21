@@ -1,36 +1,70 @@
-# Steg 1b: Kartlägga (TCK-014)
+# Steg 1b: Kartlägga (TCK-015)
 
 ```json
 {
   "active_vectors": ["State"],
   "linear_fast_track": true,
-  "ticket": "TCK-014",
-  "domain": "live_listener"
+  "ticket": "TCK-015",
+  "domain": "aac_display"
 }
 ```
 
 ## Svar på GROW-frågorna
 
-### 1. State (Mikrofonljud & RAM-buffert i DiagnosticRecorder)
-- **Svar:** I `src/features/live_listener/domain/liveListenerService.ts`, inuti `startMicrophoneStream()`, skapas `bytes` från `new Uint8Array(pcm16.buffer)`. Direkt efter rad 431 anropar vi:
+### 1. State: Dubblettspärr i `useAacDisplay.ts`
+- **Svar:**
+  I `handleSelectTile()` i `src/features/aac_display/hooks/useAacDisplay.ts`:
+  När användaren klickar på en `tile: AacTile`, undersöker vi det sista elementet i `prev.messageQueue`:
   ```ts
-  defaultDiagnosticRecorder.recordPcmChunk(bytes, false);
+  const lastTile = prev.messageQueue[prev.messageQueue.length - 1];
+  const isAdjacentDuplicate =
+    lastTile &&
+    (lastTile.id === tile.id ||
+      (lastTile.iconKey === tile.iconKey &&
+        lastTile.speechText.trim().toLowerCase() === tile.speechText.trim().toLowerCase()));
+
+  const nextQueue =
+    isAdjacentDuplicate || prev.messageQueue.length >= 5
+      ? prev.messageQueue
+      : [...prev.messageQueue, tile];
   ```
-  Detta fyller `userPcmChunks` i `diagnosticRecorder.ts`, vilket garanterar att `audio_user.pcm` och sammanfogade `audio_combined.pcm` genereras i zip-filen när användaren laddar ner diagnostik.
+  Detta säkerställer:
+  - Ingen dubbel symbol intill varandra i kön.
+  - Max 5 symboler bibehålls strikt enligt [RULE-006 & ADR-019].
+  - Användaren kan fortfarande välja olika symboler alternerande om så önskas (t.ex. Kaffe -> Bulle -> Kaffe).
+  - Talsyntesen (`speakText(tile.speechText)`) och `setSelectedTile(tile)` körs fortfarande så att användaren känner att klicket registreras.
 
-### 2. Contract (Ikonmappning, Tier 3 SVG & Topic i Declarations)
+### 2. Contract: Responsiv Bottenlayout i `UserControlZone.tsx` och `MessageBar.tsx`
 - **Svar:**
-  1. I `src/features/aac_display/domain/types.ts`: Utöka `AacTile` så att `svgContent?: string;` ingår, och tillåt sträng/utökade ikonnycklar.
-  2. I `src/features/aac_display/components/AacTileItem.tsx`:
-     - Importera Lucide-ikoner: `Image as ImageIcon`, `Wrench`, `Sparkles`, `Search`, `Music`, `Phone`, `Car`, `Tv`, `Clock`, `Utensils`, `Bed`, `AlertTriangle`.
-     - Om `tile.svgContent` finns: rendera en inline SVG med säkra dimensioner och `currentColor`.
-     - Om `tile.iconKey` matchar ("images", "repair", "generate", "search" etc.): rendera respektive Lucide-ikon.
-  3. I `src/features/live_listener/domain/liveListenerService.ts`:
-     - Addera parametern `topic` i `UPDATE_TOPIC_ZONES_DECLARATION`.
-     - Uppdatera `COGNITIVE_OBSERVER_INSTRUCTION` så att Gemini instrueras att alltid sätta en kort svensk sammanfattning i `topic`.
-     - I `handleIncomingFunctionCall`: vidarebefordra `svgContent: t.svgContent`.
+  - I `UserControlZone.tsx`:
+    - Ta bort den hårda strypningen `max-h-24 sm:max-h-28` och ersätt med ett elastiskt intervall `min-h-[4.5rem] sm:min-h-[5rem] lg:min-h-0` med `h-auto`.
+    - Ge knappar (`btn-clear-selection`, `feedback-confirm`, `feedback-reject`, `btn-toggle-mic`) tydliga flex-skydd (`shrink-0 sm:shrink` och `min-w-[3rem] sm:min-w-[3.5rem]`) så att de aldrig trycks ihop under 44-48px.
+    - Lägg till mobil safe-area padding: `pb-[max(0.75rem,env(safe-area-inset-bottom))]` för moderna smartphones.
+  - I `MessageBar.tsx`:
+    - Ge containern `shrink min-w-0 max-w-full overflow-x-auto scrollbar-none py-1` så att symbolerna glider mjukt i horisontell led om skärmen är extremt smal (t.ex. äldre mobiler < 360px bredd), utan att bryta ut eller krocka med feedbackknapparna.
 
-### 3. Resilience (Robusta fallbacks och prestanda)
+### 3. Effects: Lokal Mikrofondämpning och Turordning i `LiveListenerService`
 - **Svar:**
-  - Om `recordPcmChunk` skulle kasta ett oväntat fel (t.ex. RAM-allokeringsstrypning), fångas det i en `try-catch` så att Web Audio- och WebSocket-strömmen aldrig avbryts.
-  - Ikonvisningen har kvar `HelpCircle` som sista fallback om varken SVG eller känd ikonnyckel finns.
+  - I `src/features/live_listener/domain/liveListenerService.ts`:
+    - Lägg till intern flagga `private isLocalSpeaking: boolean = false;` och metoderna:
+      ```ts
+      public setLocalSpeaking(speaking: boolean): void {
+        this.isLocalSpeaking = speaking;
+      }
+      public isPlaybackActive(): boolean {
+        return this.isLocalSpeaking || this.pcmPlayer.isPlaying();
+      }
+      ```
+    - I `processor.onaudioprocess`:
+      ```ts
+      if (this.status !== "listening") return;
+      if (this.isPlaybackActive()) {
+        // Pausa mikrofonsändning vid aktiv uppspelning för att förhindra akustisk rundgång och avbrott [TCK-015, RULE-002]
+        return;
+      }
+      ```
+    - I `useAacDisplay.ts`:
+      Uppdatera `speakText(text, volume)` så att den sätter `defaultLiveListener.setLocalSpeaking(true)` vid start och återställer till `false` vid `utterance.onend` eller `utterance.onerror` (med en säker timeout-fallback på beräknad talspråkslängd).
+    - I `COGNITIVE_OBSERVER_INSTRUCTION` i `liveListenerService.ts`:
+      Justera regeln för "SILENT OBSERVER MODE" så att ett tydligt undantag definieras för användarinitierade `text_impulse`:
+      *"EXCEPTION: When receiving a direct user communication via \`text_impulse\`, you MAY respond with a single, very short, warm, and supportive spoken Swedish utterance (max 1 sentence) to acknowledge or reply to the user, after which you immediately return to silent observation."*

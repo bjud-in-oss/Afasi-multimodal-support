@@ -373,6 +373,84 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
       expect(stopTrackSpy).toHaveBeenCalled();
       expect((service as any).audioStream).toBeNull();
     });
+
+    it("dämpar mikrofonen vid lokal talsyntes eller aktiv PCM-uppspelning [TCK-015, RULE-002]", async () => {
+      // 1. Initialt är playback inte aktivt
+      expect(service.isPlaybackActive()).toBe(false);
+
+      // 2. Sätt lokal uppläsning aktiv
+      service.setLocalSpeaking(true);
+      expect(service.isPlaybackActive()).toBe(true);
+
+      // 3. Stäng av lokal uppläsning
+      service.setLocalSpeaking(false);
+      expect(service.isPlaybackActive()).toBe(false);
+
+      // 4. När pcmPlayer spelar upp ska isPlaybackActive också vara sant
+      vi.spyOn((service as any).pcmPlayer, "isPlaying").mockReturnValue(true);
+      expect(service.isPlaybackActive()).toBe(true);
+    });
+
+    it("skickar inte PCM-data till nätverket under mikrofondämpning [TCK-015, RULE-002]", async () => {
+      const recordPcmSpy = vi.spyOn(defaultDiagnosticRecorder, "recordPcmChunk");
+      const sendRealtimeInputSpy = vi.fn();
+      (service as any).liveSession = {
+        sendRealtimeInput: sendRealtimeInputSpy,
+      };
+
+      let capturedCallback: ((e: any) => void) | null = null;
+      const mockProcessor = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        set onaudioprocess(cb: (e: any) => void) {
+          capturedCallback = cb;
+        },
+      };
+      const mockAudioCtx = {
+        createMediaStreamSource: vi.fn().mockReturnValue({ connect: vi.fn() }),
+        createScriptProcessor: vi.fn().mockReturnValue(mockProcessor),
+        close: vi.fn(),
+      };
+      (service as any).audioContext = mockAudioCtx;
+      (service as any).processor = mockProcessor;
+
+      if (!navigator.mediaDevices) {
+        (navigator as any).mediaDevices = {};
+      }
+      navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop: vi.fn() }],
+      });
+      (window as any).AudioContext = vi.fn().mockImplementation(() => mockAudioCtx);
+
+      await service.startMicrophoneStream();
+      service.setStatus("listening");
+
+      // Aktivera dämpning (t.ex. talsyntes talar)
+      service.setLocalSpeaking(true);
+
+      const mockFloatData = new Float32Array(512);
+      mockFloatData[0] = 0.8;
+      const mockAudioEvent = {
+        inputBuffer: {
+          getChannelData: () => mockFloatData,
+        },
+      };
+
+      // Kör audiocallbacken under aktiv dämpning
+      capturedCallback!(mockAudioEvent);
+
+      // Verifiera att ingen sändning eller PCM-buffring skett under dämpningen
+      expect(sendRealtimeInputSpy).not.toHaveBeenCalled();
+      expect(recordPcmSpy).not.toHaveBeenCalled();
+
+      // Slå av dämpning och kör igen
+      service.setLocalSpeaking(false);
+      capturedCallback!(mockAudioEvent);
+      expect(recordPcmSpy).toHaveBeenCalled();
+      expect(sendRealtimeInputSpy).toHaveBeenCalled();
+
+      recordPcmSpy.mockRestore();
+    });
   });
 });
 

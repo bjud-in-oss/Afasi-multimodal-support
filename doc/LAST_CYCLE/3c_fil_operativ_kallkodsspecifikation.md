@@ -1,54 +1,63 @@
-# Steg 3c: Fil-operativ Källkodsspecifikation (TCK-014)
+# Steg 3c: Fil-operativ Källkodsspecifikation (TCK-015)
 
-## Filer och planerade ändringar för Fas 2
+## Filer och planerade källkodsändringar för Fas 2
 
-### 1. `src/features/aac_display/domain/types.ts`
-- **Ändring:** Utöka `AacTile` interfacet:
-  - `iconKey: string;` (stöd för öppna nycklar)
-  - `svgContent?: string;` (Tier 3 direktkodad SVG)
-  - Utöka `category` med `"action" | "object"`
+### 1. `src/features/aac_display/hooks/useAacDisplay.ts`
+- **Ändring i `handleSelectTile`**:
+  Kontrollera sista elementet i `prev.messageQueue`:
+  ```ts
+  const lastTile = prev.messageQueue[prev.messageQueue.length - 1];
+  const isAdjacentDuplicate =
+    lastTile &&
+    (lastTile.id === tile.id ||
+      (lastTile.iconKey === tile.iconKey &&
+        lastTile.speechText.trim().toLowerCase() === tile.speechText.trim().toLowerCase()));
 
-### 2. `src/features/aac_display/components/AacTileItem.tsx`
-- **Ändring:**
-  - Importera ikoner från `lucide-react`: `Image as ImageIcon`, `Wrench`, `Sparkles`, `Search`, `Music`, `Phone`, `Car`, `Tv`, `Clock`, `Utensils`, `Bed`, `AlertTriangle`.
-  - Uppdatera `renderIcon()`:
-    1. Om `tile.svgContent` finns och inte är tomt: rendera SVG i en säker behållare med `w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 flex items-center justify-center`.
-    2. Utöka switch-satsen med fall för:
-       - `"images" | "image" | "photo"` -> `<ImageIcon ... />`
-       - `"repair" | "wrench" | "fix" | "tool"` -> `<Wrench ... />`
-       - `"generate" | "sparkles" | "magic"` -> `<Sparkles ... />`
-       - `"search" | "find" | "look"` -> `<Search ... />`
-       - `"music" | "song"` -> `<Music ... />`
-       - `"phone" | "call"` -> `<Phone ... />`
-       - `"car" | "drive"` -> `<Car ... />`
-       - `"tv" | "television"` -> `<Tv ... />`
-       - `"clock" | "time" | "wait"` -> `<Clock ... />`
-       - `"food" | "eat" | "utensils"` -> `<Utensils ... />`
-       - `"sleep" | "bed"` -> `<Bed ... />`
-       - `"alert" | "warning"` -> `<AlertTriangle ... />`
+  const nextQueue =
+    isAdjacentDuplicate || prev.messageQueue.length >= 5
+      ? prev.messageQueue
+      : [...prev.messageQueue, tile];
+  ```
+- **Ändring i `speakText`**:
+  Koppla `utterance.onstart = () => defaultLiveListener.setLocalSpeaking(true);` och `utterance.onend / onerror = () => defaultLiveListener.setLocalSpeaking(false);`.
+
+### 2. `src/features/aac_display/components/UserControlZone.tsx`
+- **Ändring**:
+  - Ersätt fasta `max-h-24 sm:max-h-28` med flexibel och pekvänlig höjd: `min-h-[4.5rem] sm:min-h-[5rem] lg:min-h-0 h-auto`.
+  - Lägg till safe area-padding: `pb-[max(0.75rem,env(safe-area-inset-bottom))]`.
+  - Säkra knapparna med `shrink-0` och `min-w-[3rem] sm:min-w-[3.5rem]`.
+  - Ge `MessageBar`-containern `shrink min-w-0 overflow-x-auto`.
 
 ### 3. `src/features/aac_display/components/MessageBar.tsx`
-- **Ändring:**
-  - Motsvarande utökade ikonmappning i `renderIcon()` och hantering av `tile.svgContent`.
+- **Ändring**:
+  - Säkra containern med `shrink min-w-0 max-w-full overflow-x-auto select-none gap-1.5 sm:gap-2 px-1 scrollbar-none`.
+  - Säkra brickstorlekarna så att de aldrig kollapsar.
 
 ### 4. `src/features/live_listener/domain/liveListenerService.ts`
-- **Ändring:**
-  - I `startMicrophoneStream()`: inuti `processor.onaudioprocess`:
+- **Ändring**:
+  - Lägg till `private isLocalSpeaking: boolean = false;`.
+  - Implementera `public setLocalSpeaking(speaking: boolean): void`.
+  - Implementera `public isPlaybackActive(): boolean { return this.isLocalSpeaking || this.pcmPlayer.isPlaying(); }`.
+  - I `processor.onaudioprocess`:
     ```ts
-    try {
-      defaultDiagnosticRecorder.recordPcmChunk(bytes, false);
-    } catch {}
+    if (this.status !== "listening") return;
+    if (this.isPlaybackActive()) {
+      return;
+    }
     ```
-  - I `UPDATE_TOPIC_ZONES_DECLARATION`: addera egenskapen `topic` till schemat.
-  - I `COGNITIVE_OBSERVER_INSTRUCTION`: lägg till tydlig instruktion under "SYSTEM INSTRUCTIONS FOR TOOL CALLING" att alltid ange en kort, beskrivande svensk ämnesfras i `topic`.
-  - I `handleIncomingFunctionCall`: vidarebefordra `svgContent: t.svgContent` i `parsedTiles`.
+  - I `COGNITIVE_OBSERVER_INSTRUCTION`:
+    Under "1. SILENT OBSERVER MODE", formulera undantaget för `text_impulse`:
+    ```markdown
+    - **DO NOT GENERATE SPOKEN AUDIO OR VERBAL RESPONSES** during passive background listening.
+    - **EXCEPTION FOR DIRECT COMMUNICATION:** When you receive a direct user communicative message via \`text_impulse\`, you MAY generate a single, short, warm, and supportive spoken Swedish response (maximum 1 sentence) to acknowledge or reply to the user. Immediately afterwards, return to silent observer mode.
+    ```
 
-### 5. Enhetstester inför Fas 2
+### 5. TDD Enhetstester inför Fas 2
+- `src/features/aac_display/__tests__/AacDisplay.test.tsx` (eller `useAacDisplay.test.ts`):
+  - Testa att `handleSelectTile` med samma bricka två gånger i följd inte lägger till dubbletten i `messageQueue`.
+  - Testa att olika brickor kan läggas till upp till max 5 stycken.
 - `src/features/live_listener/__tests__/liveListenerService.test.ts`:
-  - Verifiera att `recordPcmChunk(bytes, false)` anropas under mikrofonströmning.
-  - Verifiera att `handleIncomingFunctionCall` sparar och vidarebefordrar `topic` och `svgContent`.
-- `src/features/aac_display/components/__tests__/AacDisplay.test.tsx`:
-  - Verifiera att brickor med `iconKey: "images"`, `"repair"`, `"generate"` och `"search"` inte renderar `HelpCircle` utan rätt ikoner.
-  - Verifiera att en bricka med `svgContent` renderar den direktkodade SVG-grafiken.
+  - Testa att `isPlaybackActive()` returnerar `true` när `setLocalSpeaking(true)` anropats eller när `pcmPlayer.isPlaying()` är `true`.
+  - Testa att `onaudioprocess` inte skickar PCM-data eller anropar `recordPcmChunk` när `isPlaybackActive()` är `true`.
 
 BESLUT: GODKÄND

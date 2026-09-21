@@ -211,7 +211,7 @@ export function useAacDisplay() {
     return "disconnected";
   })();
 
-  // Talsyntesfunktion med volymkontroll för offentlig vs privat röst [RULE-005]
+  // Talsyntesfunktion med volymkontroll för offentlig vs privat röst [RULE-005, TCK-015]
   const speakText = useCallback((text: string, volume = 1.0) => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
@@ -220,9 +220,27 @@ export function useAacDisplay() {
         utterance.lang = "sv-SE";
         utterance.rate = 0.9;
         utterance.volume = volume;
+
+        // Dämpa mikrofonsändning under lokal uppläsning [TCK-015, RULE-002]
+        utterance.onstart = () => {
+          defaultLiveListener.setLocalSpeaking(true);
+        };
+        utterance.onend = () => {
+          defaultLiveListener.setLocalSpeaking(false);
+        };
+        utterance.onerror = () => {
+          defaultLiveListener.setLocalSpeaking(false);
+        };
+
         window.speechSynthesis.speak(utterance);
+
+        // Säkerhets-timeout om webbläsarens onend inte triggas
+        const estimatedDurationMs = Math.max(1500, text.length * 120);
+        setTimeout(() => {
+          defaultLiveListener.setLocalSpeaking(false);
+        }, estimatedDurationMs);
       } catch {
-        // Fallback om röst inte är tillgänglig i miljö
+        defaultLiveListener.setLocalSpeaking(false);
       }
     }
   }, []);
@@ -264,15 +282,23 @@ export function useAacDisplay() {
     }
   }, []);
 
-  // Välj en bildbricka och lägg till i elastisk budskapsrad (max 5) [RULE-006 & ADR-019]
+  // Välj en bildbricka och lägg till i elastisk budskapsrad (max 5) med dubblettspärr [RULE-006, ADR-019, TCK-015]
   const handleSelectTile = useCallback((tile: AacTile) => {
     setSelectedTile(tile);
     setFeedbackStatus(null);
     setState((prev) => {
+      const lastTile = prev.messageQueue[prev.messageQueue.length - 1];
+      const isAdjacentDuplicate =
+        lastTile &&
+        (lastTile.id === tile.id ||
+          (lastTile.iconKey === tile.iconKey &&
+            lastTile.speechText.trim().toLowerCase() === tile.speechText.trim().toLowerCase()));
+
       const nextQueue =
-        prev.messageQueue.length < 5
-          ? [...prev.messageQueue, tile]
-          : prev.messageQueue;
+        isAdjacentDuplicate || prev.messageQueue.length >= 5
+          ? prev.messageQueue
+          : [...prev.messageQueue, tile];
+
       return {
         ...prev,
         lastSpokenText: tile.speechText,

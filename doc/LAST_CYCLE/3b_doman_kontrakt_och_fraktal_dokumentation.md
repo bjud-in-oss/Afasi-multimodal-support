@@ -1,69 +1,23 @@
-# Steg 3b: Domän, Kontrakt och Fraktal Dokumentation (TCK-014)
+# Steg 3b: Domän, Kontrakt och Fraktal Dokumentation (TCK-015)
 
-## Kontraktspecifikationer
+## Domänkontrakt och gränssnitt
 
-### 1. AacTile Datamodell (`src/features/aac_display/domain/types.ts`)
-```ts
-export interface AacTile {
-  id: string;
-  iconKey: string;
-  confidence: number;
-  isGroundTruth: boolean;
-  speechText: string;
-  category?: "food" | "health" | "social" | "need" | "action" | "object";
-  svgContent?: string; // [ADR-023 Tier 3] Direktkodad högkontrast-SVG
-}
-```
+### 1. `live_listener` Kontrakt
+- **`LiveListenerService` Metoder**:
+  - `public setLocalSpeaking(speaking: boolean): void`
+    - Sätter status för om lokal talsyntes pågår.
+  - `public isPlaybackActive(): boolean`
+    - Returnerar `true` om antingen `this.isLocalSpeaking` är `true` eller `this.pcmPlayer.isPlaying()` är `true`.
+- **Systeminstruktion (Gemini Live)**:
+  - Uppdaterad `COGNITIVE_OBSERVER_INSTRUCTION` med tydligt undantag:
+    *"EXCEPTION: When receiving a direct user communication via \`text_impulse\`, you MAY respond with a single, very short, warm, and supportive spoken Swedish utterance (max 1 sentence) to acknowledge or reply to the user, after which you immediately return to silent observation."*
 
-### 2. Gemini Live Function Declaration (`UPDATE_TOPIC_ZONES_DECLARATION`)
-```json
-{
-  "name": "update_topic_zones",
-  "description": "Tyst och icke-blockerande uppdatering av AAC-skärmens bildbrickor och samtalszoner. Destillerar pågående samtal till 2–5 kärnbegrepp.",
-  "behavior": "NON_BLOCKING",
-  "parameters": {
-    "type": "OBJECT",
-    "properties": {
-      "participantId": {
-        "type": "STRING",
-        "description": "Unikt ID eller namn för deltagaren som talar (t.ex. 'Kalle', 'Anna', 'p1')."
-      },
-      "topic": {
-        "type": "STRING",
-        "description": "Kort, beskrivande svensk kontextfras för samtalsämnet (t.ex. 'Pratar om fika', 'Planerar middag', 'Diskuterar medicinering')."
-      },
-      "colorZone": {
-        "type": "STRING",
-        "description": "Färgzon för diarisering på den delade laptopen [RULE-009].",
-        "enum": ["blue", "green", "orange", "purple"]
-      },
-      "behavior": {
-        "type": "STRING",
-        "description": "Garanterar icke-blockerande gränssnittsbeteende [RULE-002].",
-        "enum": ["NON_BLOCKING"]
-      },
-      "tiles": {
-        "type": "ARRAY",
-        "description": "Lista med 2–5 destillerade bildbrickor/kärnbegrepp [SYSTEM-009].",
-        "items": {
-          "type": "OBJECT",
-          "properties": {
-            "iconKey": { "type": "STRING" },
-            "label": { "type": "STRING" },
-            "confidence": { "type": "NUMBER" },
-            "svgContent": { "type": "STRING" }
-          },
-          "required": ["iconKey", "label"]
-        }
-      }
-    },
-    "required": ["participantId", "tiles", "behavior"]
-  }
-}
-```
-
-### 3. Diagnostic Recorder PCM-kontrakt (`SYSTEM-004`)
-- `recordPcmChunk(chunk: Uint8Array, isModel: boolean)`:
-  - `isModel === true`: Läggs till i `modelPcmChunks`.
-  - `isModel === false`: Läggs till i `userPcmChunks`.
-  - Båda tidsstämplas och skrivs till `audio_combined.pcm`.
+### 2. `aac_display` Kontrakt
+- **`useAacDisplay` Hook**:
+  - `handleSelectTile(tile: AacTile): void`
+    - Garanterar att två intilliggande identiska symboler inte kan ackumuleras i `messageQueue`.
+  - `speakText(text: string, volume?: number): void`
+    - Sätter talsyntesens livscykelhändelser så att `defaultLiveListener.setLocalSpeaking(true)` triggas vid start och `defaultLiveListener.setLocalSpeaking(false)` vid slut/fel.
+- **Komponenter**:
+  - `UserControlZone.tsx`: Säkrad med flex-shrink-skydd, adaptiv min-höjd och safe-area padding.
+  - `MessageBar.tsx`: Säkrad med horisontell scroll-resiliens vid smala skärmbredder och skyddade ikonstorlekar.

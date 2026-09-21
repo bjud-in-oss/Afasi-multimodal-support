@@ -1,50 +1,47 @@
-# Steg 3a: Helhet, Orkestrering och Integration (TCK-014)
+# Steg 3a: Helhet, Orkestrering och Integration (TCK-015)
 
-## Arkitekturell översikt och dataintegration
+## Systemintegration och datatransporter
 
-```
-+-----------------------------------------------------------------------------------+
-| LiveListenerService                                                               |
-|                                                                                   |
-|  [getUserMedia 16kHz]                                                             |
-|           |                                                                       |
-|     onaudioprocess ---> recordPcmChunk(bytes, false) ---> DiagnosticRecorder      |
-|           |                                                  (audio_user.pcm)     |
-|           v                                                                       |
-|     sendRealtimeInput (audio/pcm)                                                 |
-|           |                                                                       |
-|           v                                                                       |
-|     Gemini Live WebSocket                                                         |
-|           |                                                                       |
-|           +---> FunctionCall: update_topic_zones({ topic, tiles: [iconKey, ...] })|
-|           |                                                                       |
-|           v                                                                       |
-|     handleIncomingFunctionCall                                                    |
-|           |                                                                       |
-|           +---> vidarebefordrar topic & tiles (inkl. svgContent)                  |
-|                                                                                   |
-+----------------------------------------+------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| AacDisplay & AacTileItem & MessageBar                                             |
-|                                                                                   |
-|  - AacTileItem renderar:                                                          |
-|      1. tile.svgContent om definierat [ADR-023 Tier 3]                            |
-|      2. Mappad Lucide-ikon: image, wrench, sparkles, search, music, etc.          |
-|      3. HelpCircle som sista fallback om okänd symbol                             |
-+-----------------------------------------------------------------------------------+
+### 1. Interaktionsflöde vid symbolval och dubblettspärr
+```text
+Användare trycker på bricka [Kaffe]
+  │
+  ▼
+useAacDisplay.ts -> handleSelectTile(tile)
+  ├── 1. Kontrollera om sista brickan i messageQueue == tile
+  │      ├── Ja (Dubblett): Hoppa över tillägg i messageQueue.
+  │      └── Nej: Lägg till tile i messageQueue (max 5).
+  ├── 2. setSelectedTile(tile)
+  └── 3. speakText(tile.speechText) -> Taktil/auditiv bekräftelse.
 ```
 
-## Modulöverskridande integration
-1. `types.ts`: Typdefinitionen för `AacTile` utökas med `svgContent?: string;`.
-2. `liveListenerService.ts`: 
-   - `startMicrophoneStream` anropar `recordPcmChunk(bytes, false)`.
-   - `UPDATE_TOPIC_ZONES_DECLARATION` inkluderar `topic`.
-   - `COGNITIVE_OBSERVER_INSTRUCTION` instruerar beskrivande svensk fras för `topic`.
-   - `handleIncomingFunctionCall` mappar `svgContent: t.svgContent`.
-3. `AacTileItem.tsx`:
-   - Utökad ikonmappning för "images"/"image", "repair"/"wrench", "generate"/"sparkles", "search", "music", "phone", "car", "tv", "clock", "utensils", "bed", "alert".
-   - Stöd för direktkodad `svgContent`.
-4. `MessageBar.tsx`:
-   - Motsvarande utökade ikonmappning så att symbolerna renderas identiskt i budskapsraden.
+### 2. Akustisk dämpning och talflöde
+```text
+Gröna Bocken trycks (handleConfirm)
+  │
+  ├── 1. speakText(mening)
+  │      ├── defaultLiveListener.setLocalSpeaking(true)
+  │      └── processor.onaudioprocess stänger av PCM-sändning (Dämpning)
+  ├── 2. defaultLiveListener.sendTextImpulse(mening)
+  │
+TTS tystnar (utterance.onend)
+  │
+  ├── defaultLiveListener.setLocalSpeaking(false)
+  │
+Gemini Live svarar (kort röstsekvens på svenska)
+  │
+  ├── inkommande PCM -> pcmPlayer.enqueuePcmChunk()
+  │      └── pcmPlayer.isPlaying() är SANT -> Mikrofonen förblir dämpad
+  │
+Gemini Live tystnar
+  │
+  └── pcmPlayer.isPlaying() blir FALSKT -> Mikrofonströmning återupptas automatiskt
+```
+
+### 3. Responsiv rendering i bottenzonen
+```text
+UserControlZone.tsx
+  ├── Vänster: Rensa-knapp (RotateCcw) [shrink-0, min-w-[3rem]]
+  ├── Mitten: MessageBar (horisontellt rullbar / elastisk) + Feedbackknappar (Check, X)
+  └── Höger: Mikrofon/Samtyckesknapp (Mic/MicOff) + Diagnostikpunkt [shrink-0]
+```

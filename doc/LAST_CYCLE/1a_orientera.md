@@ -1,30 +1,36 @@
-# Steg 1a: Orientera (TCK-014)
+# Steg 1a: Orientera (TCK-015)
 
 ## Ärende & Kontext
-- **Ticket:** TCK-014
-- **Typ:** Fix / Integration
-- **Domän:** `live_listener` / `aac_display`
-- **Beskrivning:** Ikonmapping, mikrofonljud i ZIP och dynamiska ämnesrubriker (ADR-023, SYSTEM-004, RULE-002).
+- **Ticket:** TCK-015
+- **Typ:** Feature / UX / Resiliens
+- **Domän:** `aac_display` / `live_listener`
+- **Beskrivning:** Dubblettspärr i MessageBar, responsiv bottenlayout för mobila skärmar & lokal mikrofondämpning vid playback (RULE-002, RULE-005, RULE-006, SYSTEM-001).
 
-## Risknoder & GROW-frågor (State, Contract, Resilience)
+## Risknoder & GROW-frågor (State, Contract, Effects)
 
-### 1. Risknod: State (Mikrofonbuffert & RAM-integritet i DiagnosticRecorder)
-- **Goal:** Garantera att utgående mikrofonaudio (16kHz PCM från `startMicrophoneStream`) kontinuerligt lagras i RAM-bufferten via `defaultDiagnosticRecorder.recordPcmChunk(bytes, false)` så att `audio_user.pcm` och `audio_combined.pcm` genereras komplett i ZIP-exporten.
-- **Reality:** I nuvarande `startMicrophoneStream` processas PCM-bytes och sänds till `liveSession`, men `recordPcmChunk` anropas aldrig för mikrofonen (enbart för inkommande modellaudio på rad 549).
-- **Options:** Anropa `defaultDiagnosticRecorder.recordPcmChunk(bytes, false)` direkt efter `pcm16.buffer`-omvandlingen i `onaudioprocess`.
-- **Will:** Injicera anropet synkront i `onaudioprocess` och validera via enhetstest i `liveListenerService.test.ts`.
-
-### 2. Risknod: Contract (Ikonmappning, Tier 3 SVG & Ämnesrubrik i Schema)
-- **Goal:** Tillhandahålla godkända Lucide-ikoner för AI-genererade ikonnycklar (t.ex. "images", "repair", "generate", "search", "music", "phone" m.fl.), stödja direktkodad `svgContent` (Tier 3 [ADR-023]), samt säkerställa att `topic` deklareras och instrueras i Gemini Live tool calling (`update_topic_zones`).
-- **Reality:** `AacTileItem.tsx` saknar fall för dessa vanliga AI-termer och faller tillbaka till `HelpCircle`. `UPDATE_TOPIC_ZONES_DECLARATION` saknar `topic`-parametern i sitt JSON-schema trots att koden läser `args.topic`. `parsedTiles` vidarebefordrar inte `svgContent`.
+### 1. Risknod: State (Dubblettspärr i MessageBar & Kö-integritet)
+- **Goal:** Förhindra ackumulering av identiska symboler direkt efter varandra i `messageQueue` (t.ex. "Prata vidare Nikon Prata vidare Nikon Nikon") när användaren av misstag trycker upprepade gånger eller vid motoriska tremor, samtidigt som användaren fortfarande får auditiv bekräftelse för sitt tryck.
+- **Reality:** I `useAacDisplay.ts` lägger `handleSelectTile()` alltid till klickad bricka i `messageQueue` så länge `messageQueue.length < 5`, oavsett vad föregående element i kön är.
 - **Options:** 
-  1. Utöka `AacTile["iconKey"]` och `AacTileItem` samt `MessageBar` med rika Lucide-ikoner (`ImageIcon`, `Wrench`, `Sparkles`, `Search` m.fl.).
-  2. Implementera SVG-rendering i `AacTileItem` vid `tile.svgContent`.
-  3. Addera `topic` i schema-deklarationen och skärp systemprompterna i `COGNITIVE_OBSERVER_INSTRUCTION`.
-- **Will:** Implementera fullt kontraktstöd för alla tre punkter utan att bryta bakåtkompatibilitet.
+  1. Kontrollera om sista elementet i `messageQueue` matchar den nyss klickade brickan (`last.id === tile.id || (last.iconKey === tile.iconKey && last.speechText === tile.speechText)`).
+  2. Om dubblett: avstå från att lägga till i `messageQueue`, men sätt `selectedTile` och kör `speakText` för att ge taktil/auditiv feedback utan att förorena meningsbyggnaden.
+- **Will:** Implementera strikt dubblettspärr i `handleSelectTile()` som spärrar intilliggande dubbletter men bibehåller val och talsyntesåterkoppling.
 
-### 3. Risknod: Resilience (Icke-blockerande fallback & Sanering av SVG)
-- **Goal:** Gränssnittet får aldrig krascha vid okända ikonnycklar eller felaktigt formaterad `svgContent`, och WebSocket-strömmen får inte blockeras av inspelningsanrop.
-- **Reality:** `AacTileItem` hanterar redan default-fall (`HelpCircle`), men om `svgContent` är ogiltig eller saknas behövs säker fallback.
-- **Options:** Säkerställ att SVG-rendering fångas och skyddas, samt att default faller tillbaka på ren ikonografi vid behov.
-- **Will:** Säkerställa isolerad och robust felhantering i renderingskedjan.
+### 2. Risknod: Contract (Responsiv Bottenlayout & Touch Target-integritet)
+- **Goal:** Garantera att `UserControlZone` och `MessageBar` på små och medelstora mobila skärmar bibehåller full peksäkerhet (minst 44-48px touch targets), aldrig trycks ihop vertikalt eller klipper ikoner, och respekterar safe-areas i mobila webbläsare.
+- **Reality:** `UserControlZone.tsx` har en hård begränsning `max-h-24 sm:max-h-28` som vid 5 brickor i `MessageBar` tvingar ihop bekräftelse- och mikrofonknappar horisontellt och vertikalt.
+- **Options:** 
+  1. Justera höjd- och krympningsrestriktioner (`min-h-[4.5rem]`, borttagande av för snäva `max-h`, tillägg av `shrink-0` på knappar och responsiv `overflow-x-auto` vid trånga utrymmen).
+  2. Skydda knapparna `btn-clear-selection`, `feedback-confirm`, `feedback-reject` och `btn-toggle-mic` från att kollapsa under minimumbredd.
+  3. Säkerställa safe-area-padding i botten.
+- **Will:** Uppdatera Tailwind-layouten i `UserControlZone.tsx` och `MessageBar.tsx` för optimal flexibilitet och ergonomi.
+
+### 3. Risknod: Effects (Lokal Mikrofondämpning vid Playback & Röstsekvens)
+- **Goal:** Förhindra akustisk rundgång, eko, dubbelläsning och oavsiktliga "interrupted"-avbrott i Gemini Live genom att automatiskt dämpa/pausa mikrofonens PCM-ström (16kHz) medan ljud spelas upp — vare sig det gäller lokal talsyntes (TTS) vid Grön Bock eller inkommande PCM-röst från Gemini Live. Samtidigt ska Gemini instrueras att ge en kort, naturlig muntlig respons i rummet vid mottagen `text_impulse`.
+- **Reality:** Mikrofonens `onaudioprocess` skickar kontinuerligt data till Gemini Live oavsett om högtalarna spelar upp TTS eller Gemini-röst. Systeminstruktionen föreskriver också strikt "SILENT OBSERVER MODE" utan undantag för användarinitierade `text_impulse`.
+- **Options:** 
+  1. Implementera `isPlaybackActive()` i `LiveListenerService` som kontrollerar både `pcmPlayer.isPlaying()` och lokal syntesstatus (`isLocalSpeaking`).
+  2. I `onaudioprocess`: avbryt mikrofonsändning om `this.isPlaybackActive()` är sant.
+  3. Koppla `speakText()` i `useAacDisplay.ts` via talsyntesens livscykelhändelser (`onstart`, `onend`, `onerror`) till `defaultLiveListener.setLocalSpeaking(true/false)`.
+  4. Uppdatera `COGNITIVE_OBSERVER_INSTRUCTION` så att Gemini Live vid en mottagen `text_impulse` tillåts ge en kort, varm svensk röstsekvens innan återgång till tyst observation.
+- **Will:** Implementera heltäckande tillståndsdämpning och promptjustering.

@@ -83,7 +83,7 @@ export function UserControlZone({
   return (
     <aside
       data-testid="aac-user-control-zone"
-      className="w-full max-h-24 sm:max-h-28 lg:max-h-none lg:w-80 lg:h-full flex flex-row lg:flex-col items-center lg:items-stretch justify-between p-3 lg:p-5 rounded-2xl lg:rounded-3xl border border-stone-300/80 bg-stone-100/90 shadow-sm select-none gap-2 sm:gap-3 lg:gap-5 shrink-0"
+      className="w-full min-h-[4.5rem] sm:min-h-[5rem] lg:min-h-0 lg:max-h-none lg:w-80 lg:h-full flex flex-row lg:flex-col items-center lg:items-stretch justify-between p-2.5 sm:p-3 lg:p-5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:pb-5 rounded-2xl lg:rounded-3xl border border-stone-300/80 bg-stone-100/90 shadow-sm select-none gap-2 sm:gap-3 lg:gap-5 shrink-0"
     >
       {/* 1. Snabb-release och rensning av markering och budskapsrad */}
       {onClear && (
@@ -94,7 +94,7 @@ export function UserControlZone({
             onClick={onClear}
             disabled={!canClear}
             aria-label="Rensa markering"
-            className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
+            className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all shrink-0 min-w-[3rem] sm:min-w-[3.5rem] ${
               canClear
                 ? "bg-white text-stone-700 border-stone-300 hover:bg-stone-50 shadow-sm cursor-pointer active:scale-95"
                 : "bg-stone-200/50 text-stone-300 border-stone-200/60 cursor-not-allowed"
@@ -106,10 +106,10 @@ export function UserControlZone({
       )}
 
       {/* 2. Mittsektion: Elastisk Budskapsrad (MessageBar) eller Andningspaus + Feedbackreglage */}
-      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center min-w-0 max-w-sm lg:max-w-none lg:w-full lg:pt-2 lg:border-t lg:border-stone-200/80 overflow-hidden">
+      <div className="flex items-center gap-1.5 sm:gap-3 flex-1 justify-center min-w-0 max-w-sm lg:max-w-none lg:w-full lg:pt-2 lg:border-t lg:border-stone-200/80 overflow-hidden">
         {/* Budskapsrad vid aktiva symboler eller andningspaus */}
         {(messageQueue.length > 0 || isBreathingPause) && (
-          <div className="shrink min-w-0 overflow-hidden flex items-center justify-center">
+          <div className="shrink min-w-0 overflow-x-auto scrollbar-none flex items-center justify-center py-1">
             <MessageBar
               messageQueue={messageQueue}
               selectedQueueIndex={selectedQueueIndex}
@@ -126,7 +126,7 @@ export function UserControlZone({
           onClick={onConfirm}
           disabled={!canConfirm}
           aria-label="Bekräfta"
-          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
+          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all shrink-0 min-w-[3rem] sm:min-w-[3.5rem] ${
             canConfirm
               ? "bg-emerald-700 text-white border-emerald-800 hover:bg-emerald-800 shadow-sm cursor-pointer active:scale-95"
               : "bg-stone-200/60 text-stone-400 border-stone-200 cursor-not-allowed"
@@ -141,7 +141,7 @@ export function UserControlZone({
           onClick={onReject}
           disabled={!hasSelectedTile}
           aria-label="Avfärda"
-          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
+          className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all shrink-0 min-w-[3rem] sm:min-w-[3.5rem] ${
             hasSelectedTile
               ? "bg-rose-700 text-white border-rose-800 hover:bg-rose-800 shadow-sm cursor-pointer active:scale-95"
               : "bg-stone-200/60 text-stone-400 border-stone-200 cursor-not-allowed"

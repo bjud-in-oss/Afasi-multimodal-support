@@ -176,7 +176,7 @@ export function MessageBar({
   return (
     <div
       data-testid="message-bar-container"
-      className="flex items-center justify-center gap-1.5 sm:gap-2 px-1 max-w-full overflow-hidden select-none"
+      className="flex items-center justify-center gap-1.5 sm:gap-2 px-1 shrink min-w-0 max-w-full overflow-x-auto select-none scrollbar-none py-1"
     >
       {messageQueue.map((tile, index) => {
         const isSelected = selectedQueueIndex === index;

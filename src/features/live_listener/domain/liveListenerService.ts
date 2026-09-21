@@ -42,7 +42,8 @@ Your sole mission is to silently observe live multimodal input (audio, screen, r
 ## CORE BEHAVIORAL RULES & CONSTRAINTS
 
 ### 1. SILENT OBSERVER MODE ([RULE-002], [SYSTEM-009])
-- **DO NOT GENERATE SPOKEN AUDIO OR VERBAL RESPONSES** during live listening.
+- **DO NOT GENERATE SPOKEN AUDIO OR VERBAL RESPONSES** during passive background listening.
+- **EXCEPTION FOR DIRECT COMMUNICATION ([RULE-005]):** When you receive a direct user communicative message via \`text_impulse\`, you MAY generate a single, very short, warm, and supportive spoken Swedish response (maximum 1 sentence) to acknowledge or reply to the user. Immediately afterwards, return to silent observer mode.
 - You do NOT transcribe word-for-word. You **DISTILL**.
 - Boil down long monologues or background conversation into a maximum of 2–3 high-priority, actionable visual concepts (keywords/symbols).
 - Output your response **ONLY** via non-blocking tool calls (\`update_topic_zones\`).
@@ -182,6 +183,7 @@ export class LiveListenerService {
   private audioStream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
   private audioProcessor: ScriptProcessorNode | null = null;
+  private isLocalSpeaking: boolean = false;
 
   constructor(options: ListenerOptions = {}) {
     this.options = {
@@ -212,6 +214,14 @@ export class LiveListenerService {
 
   public getPcmPlayer(): PcmPlayer {
     return this.pcmPlayer;
+  }
+
+  public setLocalSpeaking(speaking: boolean): void {
+    this.isLocalSpeaking = speaking;
+  }
+
+  public isPlaybackActive(): boolean {
+    return this.isLocalSpeaking || this.pcmPlayer.isPlaying();
   }
 
   public isMicActivatedByClick(): boolean {
@@ -419,6 +429,9 @@ export class LiveListenerService {
 
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (this.status !== "listening") return;
+        // Dämpa mikrofonen vid lokal talsyntes eller aktiv PCM-uppspelning för att förhindra akustisk rundgång och avbrott [TCK-015, RULE-002]
+        if (this.isPlaybackActive()) return;
+
         const inputData = e.inputBuffer.getChannelData(0);
         if (!inputData || inputData.length === 0) return;
 

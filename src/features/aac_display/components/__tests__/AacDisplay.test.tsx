@@ -327,12 +327,12 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
     });
   });
 
-  describe("Layout och Skärmutrymme (TCK-012 / UI-FIX)", () => {
-    it("renderar UserControlZone som en kompakt botten-docka med max-h-24 sm:max-h-28 och flex-row", () => {
+  describe("Layout och Skärmutrymme (TCK-012 / TCK-015)", () => {
+    it("renderar UserControlZone som en elastisk responsiv botten-docka med safe-area och flex-row", () => {
       render(<AacDisplay />);
       const controlZone = screen.getByTestId("aac-user-control-zone");
-      expect(controlZone.className).toContain("max-h-24");
-      expect(controlZone.className).toContain("sm:max-h-28");
+      expect(controlZone.className).toContain("min-h-[4.5rem]");
+      expect(controlZone.className).toContain("sm:min-h-[5rem]");
       expect(controlZone.className).toContain("flex-row");
       expect(controlZone.className).toContain("justify-between");
 
