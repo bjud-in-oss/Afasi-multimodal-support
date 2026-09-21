@@ -101,4 +101,7 @@ export interface AacDisplayState {
   feedbackRecords: FeedbackRecord[];
   isListening: boolean;
   consentGranted: boolean;
+  messageQueue: AacTile[];
+  selectedQueueIndex: number | null;
+  isBreathingPause: boolean;
 }

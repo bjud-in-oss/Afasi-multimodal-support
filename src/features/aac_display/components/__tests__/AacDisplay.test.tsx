@@ -398,4 +398,144 @@ describe("AacDisplay (Textlöst AAC-gränssnitt för Afasideltagare)", () => {
       );
     });
   });
+
+  describe("Elastisk Budskapsrad, Offentlig Röst & Post-Speech Reset (TCK-013 / Fas 2 TDD)", () => {
+    it("lägger till valda symboler i budskapsraden upp till max 5 symboler (RULE-006 & ADR-019)", () => {
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1", [
+          { id: "tile-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+          { id: "tile-2", iconKey: "cake", confidence: 0.95, isGroundTruth: true, speechText: "Bulle" },
+          { id: "tile-3", iconKey: "water", confidence: 0.95, isGroundTruth: true, speechText: "Vatten" },
+          { id: "tile-4", iconKey: "apple", confidence: 0.95, isGroundTruth: true, speechText: "Äpple" },
+        ]);
+      });
+
+      // Klicka på 3 brickor i zon
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+      fireEvent.click(screen.getByTestId("aac-tile-tile-2"));
+      fireEvent.click(screen.getByTestId("aac-tile-tile-3"));
+
+      // Verifiera att 3 brickor syns i budskapsraden
+      expect(screen.getByTestId("message-bar-tile-0")).toBeInTheDocument();
+      expect(screen.getByTestId("message-bar-tile-1")).toBeInTheDocument();
+      expect(screen.getByTestId("message-bar-tile-2")).toBeInTheDocument();
+
+      // Klicka på 2 brickor till så vi når taket på 5
+      fireEvent.click(screen.getByTestId("aac-tile-tile-4"));
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+
+      expect(screen.getByTestId("message-bar-tile-3")).toBeInTheDocument();
+      expect(screen.getByTestId("message-bar-tile-4")).toBeInTheDocument();
+
+      // Ett 6:e klick ska INTE lägga till en sjätte bricka (tak: max 5)
+      fireEvent.click(screen.getByTestId("aac-tile-tile-2"));
+      expect(screen.queryByTestId("message-bar-tile-5")).not.toBeInTheDocument();
+    });
+
+    it("utför punktkorrigering via klick och Typ A rött kryss (RULE-015 & RULE-005)", () => {
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1", [
+          { id: "tile-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+          { id: "tile-2", iconKey: "cake", confidence: 0.95, isGroundTruth: true, speechText: "Bulle" },
+        ]);
+      });
+
+      // Lägg till Kaffe och Bulle
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+      fireEvent.click(screen.getByTestId("aac-tile-tile-2"));
+
+      const firstTileInQueue = screen.getByTestId("message-bar-tile-0");
+      expect(firstTileInQueue).toBeInTheDocument();
+
+      // Klick på brickan i budskapsraden aktiverar punktkorrigering och visar Typ A kryss
+      fireEvent.click(firstTileInQueue);
+      const removeBtn = screen.getByTestId("message-bar-remove-0");
+      expect(removeBtn).toBeInTheDocument();
+
+      // Klick på krysset raderar enbart denna symbol
+      fireEvent.click(removeBtn);
+
+      // Nu ska endast 1 symbol återstå i budskapsraden (Bulle)
+      expect(screen.queryByTestId("message-bar-tile-1")).not.toBeInTheDocument();
+      expect(screen.getByTestId("message-bar-tile-0")).toBeInTheDocument();
+    });
+
+    it("läser upp meningen högt och skickar textimpuls till Gemini Live vid Grön Bock (RULE-005 & SYSTEM-001)", () => {
+      const sendImpulseSpy = vi.spyOn(defaultLiveListener, "sendTextImpulse");
+
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1", [
+          { id: "tile-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+          { id: "tile-2", iconKey: "cake", confidence: 0.95, isGroundTruth: true, speechText: "Bulle" },
+        ]);
+      });
+
+      // Skapa mening: Kaffe + Bulle
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+      fireEvent.click(screen.getByTestId("aac-tile-tile-2"));
+
+      // Klicka på Gröna Bocken
+      const confirmBtn = screen.getByTestId("feedback-confirm");
+      fireEvent.click(confirmBtn);
+
+      // Verifiera att sendTextImpulse anropas med den sammansatta meningen
+      expect(sendImpulseSpy).toHaveBeenCalledWith("Kaffe Bulle");
+    });
+
+    it("aktiverar 3000 ms andningspaus efter uppläsning och nollställer budskapsraden (RULE-008)", () => {
+      vi.useFakeTimers();
+
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1", [
+          { id: "tile-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+        ]);
+      });
+
+      // Lägg till Kaffe och bekräfta
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+      fireEvent.click(screen.getByTestId("feedback-confirm"));
+
+      // Andningspaus-indikator ska vara aktiv direkt efter tal
+      expect(screen.getByTestId("breathing-pause-indicator")).toBeInTheDocument();
+
+      // Efter 3000 ms ska andningspausen vara klar och kön tömd
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      expect(screen.queryByTestId("breathing-pause-indicator")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("message-bar-tile-0")).not.toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+
+    it("avbryter andningspaus och nollställer budskapsraden omedelbart vid klick på Rensa", () => {
+      vi.useFakeTimers();
+
+      render(<AacDisplay />);
+      act(() => {
+        simulateUtterance("speaker-1", [
+          { id: "tile-1", iconKey: "coffee", confidence: 0.95, isGroundTruth: true, speechText: "Kaffe" },
+        ]);
+      });
+
+      fireEvent.click(screen.getByTestId("aac-tile-tile-1"));
+      fireEvent.click(screen.getByTestId("feedback-confirm"));
+
+      expect(screen.getByTestId("breathing-pause-indicator")).toBeInTheDocument();
+
+      // Klicka på Rensa
+      fireEvent.click(screen.getByTestId("btn-clear-selection"));
+
+      // Både andningspaus och budskapsrad ska vara nollställda omedelbart
+      expect(screen.queryByTestId("breathing-pause-indicator")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("message-bar-tile-0")).not.toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+  });
 });

@@ -10,6 +10,9 @@ export function AacDisplay() {
     state,
     selectedTile,
     feedbackStatus,
+    messageQueue,
+    selectedQueueIndex,
+    isBreathingPause,
     connectionStatus,
     lastEventStatus,
     selectScenario,
@@ -17,6 +20,8 @@ export function AacDisplay() {
     handleConfirm,
     handleReject,
     handleClear: baseHandleClear,
+    handleSelectQueueTile,
+    handleRemoveQueueTile,
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,
@@ -97,15 +102,20 @@ export function AacDisplay() {
         )}
       </div>
 
-      {/* Afasideltagarens dedikerade kontrollzon med feedback, rensa och mikrofon */}
+      {/* Afasideltagarens dedikerade kontrollzon med elastisk budskapsrad, feedback, rensa och mikrofon */}
       <UserControlZone
         activeScenarioId={state.activeScenarioId}
         hasSelectedTile={Boolean(selectedTile)}
+        messageQueue={messageQueue}
+        selectedQueueIndex={selectedQueueIndex}
+        isBreathingPause={isBreathingPause}
         isListening={state.isListening}
         connectionStatus={connectionStatus}
         lastEventStatus={lastEventStatus}
         feedbackStatus={feedbackStatus}
         onSelectScenario={selectScenario}
+        onSelectQueueTile={handleSelectQueueTile}
+        onRemoveQueueTile={handleRemoveQueueTile}
         onConfirm={handleConfirm}
         onReject={handleReject}
         onClear={handleClear}

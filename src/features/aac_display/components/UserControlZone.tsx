@@ -8,15 +8,22 @@ import {
   Download,
 } from "lucide-react";
 import { defaultDiagnosticRecorder } from "../../live_listener/domain/diagnosticRecorder";
+import { AacTile } from "../domain/types";
+import { MessageBar } from "./MessageBar";
 
 interface UserControlZoneProps {
   activeScenarioId?: string | null;
   hasSelectedTile: boolean;
+  messageQueue?: AacTile[];
+  selectedQueueIndex?: number | null;
+  isBreathingPause?: boolean;
   isListening: boolean;
   connectionStatus?: "disconnected" | "connecting" | "active";
   lastEventStatus?: string;
   feedbackStatus: "confirmed" | "rejected" | null;
   onSelectScenario?: (key: "coffee" | "cart" | "heart" | "home") => void;
+  onSelectQueueTile?: (index: number) => void;
+  onRemoveQueueTile?: (index: number, e: React.MouseEvent) => void;
   onConfirm: () => void;
   onReject: () => void;
   onClear?: () => void;
@@ -25,10 +32,15 @@ interface UserControlZoneProps {
 
 export function UserControlZone({
   hasSelectedTile,
+  messageQueue = [],
+  selectedQueueIndex = null,
+  isBreathingPause = false,
   isListening,
   connectionStatus = "disconnected",
   lastEventStatus = "Frånkopplad (Väntar på aktivering)",
   feedbackStatus,
+  onSelectQueueTile,
+  onRemoveQueueTile,
   onConfirm,
   onReject,
   onClear,
@@ -38,6 +50,9 @@ export function UserControlZone({
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
   const [isExportingZip, setIsExportingZip] = useState<boolean>(false);
   const lastTapRef = useRef<number>(0);
+
+  const canConfirm = hasSelectedTile || messageQueue.length > 0;
+  const canClear = hasSelectedTile || messageQueue.length > 0 || isBreathingPause;
 
   // Dubbelklick eller snabbt dubbeltryck på statuspricken växlar diagnostikpanelen
   const handleDotClick = (e: React.MouseEvent) => {
@@ -70,17 +85,17 @@ export function UserControlZone({
       data-testid="aac-user-control-zone"
       className="w-full max-h-24 sm:max-h-28 lg:max-h-none lg:w-80 lg:h-full flex flex-row lg:flex-col items-center lg:items-stretch justify-between p-3 lg:p-5 rounded-2xl lg:rounded-3xl border border-stone-300/80 bg-stone-100/90 shadow-sm select-none gap-2 sm:gap-3 lg:gap-5 shrink-0"
     >
-      {/* 1. Snabb-release och rensning av markering */}
+      {/* 1. Snabb-release och rensning av markering och budskapsrad */}
       {onClear && (
         <div className="shrink-0 lg:w-full">
           <button
             type="button"
             data-testid="btn-clear-selection"
             onClick={onClear}
-            disabled={!hasSelectedTile}
+            disabled={!canClear}
             aria-label="Rensa markering"
             className={`h-12 w-12 sm:h-14 sm:w-14 lg:w-full lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
-              hasSelectedTile
+              canClear
                 ? "bg-white text-stone-700 border-stone-300 hover:bg-stone-50 shadow-sm cursor-pointer active:scale-95"
                 : "bg-stone-200/50 text-stone-300 border-stone-200/60 cursor-not-allowed"
             }`}
@@ -90,16 +105,29 @@ export function UserControlZone({
         </div>
       )}
 
-      {/* 2. Feedbackreglage: Grön bock och Rött kryss för successiv inlärning */}
-      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center max-w-sm lg:max-w-none lg:w-full lg:pt-2 lg:border-t lg:border-stone-200/80">
+      {/* 2. Mittsektion: Elastisk Budskapsrad (MessageBar) eller Andningspaus + Feedbackreglage */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center min-w-0 max-w-sm lg:max-w-none lg:w-full lg:pt-2 lg:border-t lg:border-stone-200/80 overflow-hidden">
+        {/* Budskapsrad vid aktiva symboler eller andningspaus */}
+        {(messageQueue.length > 0 || isBreathingPause) && (
+          <div className="shrink min-w-0 overflow-hidden flex items-center justify-center">
+            <MessageBar
+              messageQueue={messageQueue}
+              selectedQueueIndex={selectedQueueIndex}
+              isBreathingPause={isBreathingPause}
+              onSelectQueueTile={onSelectQueueTile ?? (() => {})}
+              onRemoveQueueTile={onRemoveQueueTile ?? (() => {})}
+            />
+          </div>
+        )}
+
         <button
           type="button"
           data-testid="feedback-confirm"
           onClick={onConfirm}
-          disabled={!hasSelectedTile}
+          disabled={!canConfirm}
           aria-label="Bekräfta"
           className={`flex-1 h-12 sm:h-14 lg:h-auto lg:py-4 rounded-2xl border flex items-center justify-center transition-all ${
-            hasSelectedTile
+            canConfirm
               ? "bg-emerald-700 text-white border-emerald-800 hover:bg-emerald-800 shadow-sm cursor-pointer active:scale-95"
               : "bg-stone-200/60 text-stone-400 border-stone-200 cursor-not-allowed"
           }`}

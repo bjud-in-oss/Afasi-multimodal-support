@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   AacTile,
   PracticeScenario,
@@ -175,7 +175,20 @@ export function useAacDisplay() {
     feedbackRecords: [],
     isListening: false,
     consentGranted: false,
+    messageQueue: [],
+    selectedQueueIndex: null,
+    isBreathingPause: false,
   });
+
+  const breathingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (breathingTimerRef.current) {
+        clearTimeout(breathingTimerRef.current);
+      }
+    };
+  }, []);
 
   const [listenerStatus, setListenerStatus] = useState<ListenerStatus>(
     defaultLiveListener.getStatus()
@@ -198,14 +211,15 @@ export function useAacDisplay() {
     return "disconnected";
   })();
 
-  // Talsyntesfunktion
-  const speakText = useCallback((text: string) => {
+  // Talsyntesfunktion med volymkontroll för offentlig vs privat röst [RULE-005]
+  const speakText = useCallback((text: string, volume = 1.0) => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "sv-SE";
         utterance.rate = 0.9;
+        utterance.volume = volume;
         window.speechSynthesis.speak(utterance);
       } catch {
         // Fallback om röst inte är tillgänglig i miljö
@@ -222,6 +236,9 @@ export function useAacDisplay() {
         mode: "IDLE",
         activeScenarioId: null,
         speakerZones: [],
+        messageQueue: [],
+        selectedQueueIndex: null,
+        isBreathingPause: false,
       }));
       setSelectedTile(null);
       setFeedbackStatus(null);
@@ -247,16 +264,97 @@ export function useAacDisplay() {
     }
   }, []);
 
-  // Välj en bildbricka
+  // Välj en bildbricka och lägg till i elastisk budskapsrad (max 5) [RULE-006 & ADR-019]
   const handleSelectTile = useCallback((tile: AacTile) => {
     setSelectedTile(tile);
     setFeedbackStatus(null);
-    setState((prev) => ({ ...prev, lastSpokenText: tile.speechText }));
+    setState((prev) => {
+      const nextQueue =
+        prev.messageQueue.length < 5
+          ? [...prev.messageQueue, tile]
+          : prev.messageQueue;
+      return {
+        ...prev,
+        lastSpokenText: tile.speechText,
+        messageQueue: nextQueue,
+      };
+    });
     speakText(tile.speechText);
   }, [speakText]);
 
-  // Bekräfta gissning (Grön bock)
+  // Privat provläsning och punktmarkering i budskapsraden [RULE-015 & RULE-005]
+  const handleSelectQueueTile = useCallback((index: number) => {
+    setState((prev) => {
+      const tile = prev.messageQueue[index];
+      if (tile) {
+        speakText(tile.speechText, 0.5);
+      }
+      return {
+        ...prev,
+        selectedQueueIndex: index,
+      };
+    });
+  }, [speakText]);
+
+  // Punktkorrigering: radera enbart vald symbol ur budskapsraden med Typ A kryss [RULE-015]
+  const handleRemoveQueueTile = useCallback((index: number, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setState((prev) => {
+      const updatedQueue = prev.messageQueue.filter((_, idx) => idx !== index);
+      return {
+        ...prev,
+        messageQueue: updatedQueue,
+        selectedQueueIndex: null,
+      };
+    });
+  }, []);
+
+  // Bekräfta budskap eller gissning (Grön bock) [RULE-005, SYSTEM-001 & RULE-008]
   const handleConfirm = useCallback(() => {
+    if (state.messageQueue.length > 0) {
+      const sentence = state.messageQueue.map((t) => t.speechText).join(" ");
+      speakText(sentence, 1.0);
+      defaultLiveListener.sendTextImpulse(sentence);
+
+      // Spara i adaptiva minnet för varje ingående symbol
+      state.messageQueue.forEach((tile) => {
+        defaultAdaptiveMemory.recordFeedback({
+          contextKey: state.activeScenarioId || "general",
+          tileId: tile.id,
+          iconKey: tile.iconKey,
+          action: "confirm",
+          initialConfidence: tile.confidence,
+        });
+      });
+
+      setFeedbackStatus("confirmed");
+
+      // Aktivera 3000 ms vilsam andningspaus före reset [RULE-008]
+      if (breathingTimerRef.current) {
+        clearTimeout(breathingTimerRef.current);
+      }
+      setState((prev) => ({
+        ...prev,
+        isBreathingPause: true,
+        selectedQueueIndex: null,
+      }));
+
+      breathingTimerRef.current = setTimeout(() => {
+        setState((prev) => ({
+          ...prev,
+          messageQueue: [],
+          isBreathingPause: false,
+          selectedQueueIndex: null,
+        }));
+        setSelectedTile(null);
+        setFeedbackStatus(null);
+        breathingTimerRef.current = null;
+      }, 3000);
+      return;
+    }
+
     if (!selectedTile) return;
 
     const record: FeedbackRecord = {
@@ -289,7 +387,7 @@ export function useAacDisplay() {
     }));
 
     speakText("Ja, precis så.");
-  }, [selectedTile, speakText, state.activeScenarioId]);
+  }, [selectedTile, speakText, state.activeScenarioId, state.messageQueue]);
 
   // Avfärda gissning (Rött kryss)
   const handleReject = useCallback(() => {
@@ -486,21 +584,36 @@ export function useAacDisplay() {
     });
   }, []);
 
-  // Rensa markering och feedback
+  // Rensa markering, budskapsrad och avbryt eventuell andningspaus
   const handleClear = useCallback(() => {
+    if (breathingTimerRef.current) {
+      clearTimeout(breathingTimerRef.current);
+      breathingTimerRef.current = null;
+    }
     setSelectedTile(null);
     setFeedbackStatus(null);
+    setState((prev) => ({
+      ...prev,
+      messageQueue: [],
+      selectedQueueIndex: null,
+      isBreathingPause: false,
+    }));
   }, []);
 
   return {
     state,
     selectedTile,
     feedbackStatus,
+    messageQueue: state.messageQueue,
+    selectedQueueIndex: state.selectedQueueIndex,
+    isBreathingPause: state.isBreathingPause,
     selectScenario,
     handleSelectTile,
     handleConfirm,
     handleReject,
     handleClear,
+    handleSelectQueueTile,
+    handleRemoveQueueTile,
     handleDismissTileSilent,
     handleConfirmTileSilent,
     toggleListening,
