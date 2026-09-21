@@ -23,7 +23,6 @@ HUVUDUPPDRAG: Enhetlig kodstandard, direkt dialog och linjär exekvering. Ge all
 Börja varje svar med exakt denna statusrad (använd kvitto-hashen från doc/LAST_CYCLE/VERIFY_RECEIPT.json och välj exakt ett alternativ per valfält):
 [VERIFIED: hash • Kodande/Analytisk:skillnamn • Helhet/Domän/Komponent • sök/väg/] TCK-XXX: Ticket-rubrik
 
-
 5. GOOGLE GEMINI SKILLS:
 - gemini-api-dev: Används för text, multimodal och strukturerade svar med @google/genai.
 - gemini-live-api-dev: Används för dubbelriktad WebSocket streaming och realtidsinteraktioner.
