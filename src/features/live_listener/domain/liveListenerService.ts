@@ -67,7 +67,8 @@ When updating the display, always construct the JSON payload for \`update_topic_
 
 1. **Max Tiles:** 2 to 5 concept tiles depending on current fatigue setting.
 2. **Tile Format:** Simple, concrete nouns or core communication intents (e.g., "Kaffe", "Vänta", "Håller med", "Hjälp").
-3. **Behavior:** \`NON_BLOCKING\` (never interrupt the user's touch interaction or input line).
+3. **Descriptive Topic:** Always provide a short, descriptive Swedish phrase in the \`topic\` field summarizing what is being talked about (e.g., "Pratar om fika", "Planerar middag", "Diskuterar reparation") rather than generic labels like "Kalle talar".
+4. **Behavior:** \`NON_BLOCKING\` (never interrupt the user's touch interaction or input line).
 
 ---
 
@@ -87,6 +88,11 @@ const UPDATE_TOPIC_ZONES_DECLARATION: any = {
         type: "STRING",
         description: "Unikt ID eller namn för deltagaren som talar (t.ex. 'Kalle', 'Anna', 'p1').",
       },
+      topic: {
+        type: "STRING",
+        description:
+          "Kort, beskrivande svensk kontextfras för samtalsämnet (t.ex. 'Pratar om fika', 'Planerar middag', 'Diskuterar reparation').",
+      },
       colorZone: {
         type: "STRING",
         description: "Färgzon för diarisering på den delade laptopen [RULE-009].",
@@ -105,7 +111,7 @@ const UPDATE_TOPIC_ZONES_DECLARATION: any = {
           properties: {
             iconKey: {
               type: "STRING",
-              description: "Unik söknyckel för ikonen (t.ex. 'coffee', 'wait', 'agree', 'help').",
+              description: "Unik söknyckel för ikonen (t.ex. 'coffee', 'wait', 'agree', 'help', 'images', 'repair', 'generate', 'search').",
             },
             label: {
               type: "STRING",
@@ -431,6 +437,11 @@ export class LiveListenerService {
         }
         const base64Pcm = btoa(binary);
 
+        // Spara utgående mikrofonaudio i diagnosticRecorder för ZIP-export [SYSTEM-004]
+        try {
+          defaultDiagnosticRecorder.recordPcmChunk(bytes, false);
+        } catch {}
+
         this.logPcmPacket();
 
         if (this.liveSession && typeof this.liveSession.sendRealtimeInput === "function") {
@@ -618,6 +629,7 @@ export class LiveListenerService {
       confidence: typeof t.confidence === "number" ? t.confidence : 0.9,
       isGroundTruth: (t.confidence ?? 0.9) >= 0.8,
       speechText: t.label || t.speechText || t.iconKey || "Symbol",
+      svgContent: t.svgContent || undefined,
     }));
 
     const deduplicatedTiles = this.filterRecentDuplicates(parsedTiles);

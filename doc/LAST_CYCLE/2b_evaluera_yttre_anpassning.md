@@ -1,14 +1,7 @@
-# Steg 2b: Evaluera Yttre Anpassning (Cykel 10 - TCK-013)
+# Steg 2b: Evaluera yttre anpassning (TCK-014)
 
-## 1. Utvärdering mot AAC Kognitiva Regler (`doc/AAC_COGNITIVE_RULES.md`)
-
-| Regel | Kognitivt Syfte | Uppfyllnad i TCK-013 |
-| :--- | :--- | :--- |
-| **RULE-006 (Elastisk budskapsrad)** | Minska kognitiv belastning; förhindra att symboler hamnar utanför synfältet. | Tak på max 5 symboler. Flex-skalning från `w-24` ner till `w-16` säkerställer 100 % synlighet utan rullningslister. |
-| **RULE-015 (Typ A Kryss för punktkorrigering)** | Undvika frustration av att behöva bygga om en hel mening vid ett feltryck. | Klick på specifik symbol i budskapsraden provläser och ger ett distinkt Typ A rött kryss för att avlägsna enbart den symbolen. |
-| **RULE-005 (Akustisk Feedback & Röstseparation)** | Säkerställa att deltagaren har kontroll över vad som sägs offentligt vs privat. | Enskilt klick i budskapsraden ger dämpad/privat provlyssning. Endast Grön Bock avfyrar full offentlig röstuppläsning. |
-| **RULE-008 (Post-speech Reset & Andningspaus)** | Ge motorisk och mental återhämtning efter genomförd kommunikationshandling. | 3000 ms lugn andningspaus utan plötsliga visuella hopp, följt av mjuk nollställning av budskapsraden. |
-| **RULE-003 (No Scroll UI)** | Eliminera finmotoriska feldrag och "ur syn, ur sinn". | Hela kontrollzonen och budskapsraden ryms i den kompakta bottenraden (`max-h-24 sm:max-h-28`) på mobil och breddas på desktop. |
-
-## 2. Slutsats
-Den yttre anpassningen överensstämmer fullständigt med de kognitiva afasiprinciperna och skapar en sammanhållen, stressfri kommunikationscykel.
+## Validering mot kognitiva regler och arkitekturkrav
+- **ADR-023 (Tier 1-3 Ikonarkitektur)**: Tier 1 (lokal Lucide-cache), Tier 2 (lexikal ordbok) och Tier 3 (direktkodad SVG). TCK-014 uppfyller Tier 1 och Tier 3 fullt ut.
+- **SYSTEM-004 (Diagnostik & Diagnosrecorder)**: Kräver att både mikrofon- och modelljud sparas som 16kHz PCM och kombineras med millisekundsnoggrann tidsstämpel i zip-filen.
+- **RULE-002 & RULE-009 (Icke-blockerande samtalszoner & radikal symmetri)**: Kontekstfras i `topic` berikar samtalszonen utan att introducera distraherande textavsnitt eller flytta fokus från bildbrickorna.
+- **Inga regressionsrisker**: Bakåtkompatibilitet bibehålls för alla befintliga ikoner och tester.

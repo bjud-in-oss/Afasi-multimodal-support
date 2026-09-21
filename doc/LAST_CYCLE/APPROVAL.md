@@ -1,7 +1,10 @@
-# Godkännande av Fas 1 Planering (Steg 3c Token Gate)
+# Godkännande av Fas 1 Planering (TCK-014)
 
-- **Ärende:** TCK-013 (Elastisk Budskapsrad, Offentlig Röst & Post-Speech Reset)
-- **Token:** `TOKEN-TCK-013-BUDSKAP-9A4B`
-- **Status:** Godkänd av användaren i chatten
-- **Datum:** 2026-09-20
-- **Nästa Steg:** Steg 4 (TDD-tester och skarp källkodsimplementering i `/src`)
+- **Token:** TOKEN-TCK-014-IKON-MIC-7C3E
+- **Datum:** 2026-09-21
+- **Status:** Godkänd av användaren
+- **Omfattning:** Fas 2 TDD & Skarp implementering för TCK-014:
+  1. Ikonmappning för AI-nycklar & Tier 3 SVG-rendering (AacTileItem & MessageBar)
+  2. PCM-inspelning av mikrofon i DiagnosticRecorder (liveListenerService)
+  3. Deklaration och instruktion för `topic` samt `svgContent` (liveListenerService)
+  4. Nya enhetstester

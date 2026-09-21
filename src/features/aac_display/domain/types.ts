@@ -19,11 +19,31 @@ export interface AacTile {
     | "pain"
     | "toilet"
     | "yes"
-    | "no";
+    | "no"
+    | "images"
+    | "image"
+    | "photo"
+    | "repair"
+    | "wrench"
+    | "generate"
+    | "sparkles"
+    | "search"
+    | "music"
+    | "phone"
+    | "car"
+    | "tv"
+    | "clock"
+    | "food"
+    | "utensils"
+    | "sleep"
+    | "bed"
+    | "alert"
+    | (string & {});
   confidence: number; // 0.0 - 1.0
   isGroundTruth: boolean;
   speechText: string;
-  category?: "food" | "health" | "social" | "need";
+  category?: "food" | "health" | "social" | "need" | "action" | "object";
+  svgContent?: string; // [ADR-023 Tier 3] Direktkodad högkontrast-SVG
 }
 
 /**

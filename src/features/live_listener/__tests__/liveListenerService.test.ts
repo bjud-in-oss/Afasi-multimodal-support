@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { LiveListenerService } from "../domain/liveListenerService";
 import { LiveUtteranceEvent, ListenerStatus } from "../domain/types";
+import { defaultDiagnosticRecorder } from "../domain/diagnosticRecorder";
 
 describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
   let service: LiveListenerService;
@@ -262,6 +263,97 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
       expect(emitted.tiles.length).toBe(2);
       expect(emitted.tiles[0].iconKey).toBe("coffee");
       expect(service.getLastEventStatus()).toBe("FunctionCall: update_topic_zones");
+    });
+
+    it("vidarebefordrar svgContent och dynamisk topic från update_topic_zones [TCK-014, ADR-023]", () => {
+      const mockCall = {
+        name: "update_topic_zones",
+        args: {
+          participantId: "speaker-anna",
+          topic: "Diskuterar bilreparation",
+          tiles: [
+            {
+              iconKey: "repair",
+              speechText: "Reparera",
+              confidence: 0.92,
+              svgContent: "<svg><circle cx='12' cy='12' r='10'/></svg>",
+            },
+          ],
+        },
+      };
+
+      service.handleIncomingFunctionCall(mockCall);
+
+      expect(emittedUtterances.length).toBe(1);
+      const emitted = emittedUtterances[0];
+      expect(emitted.speakerId).toBe("speaker-anna");
+      expect(emitted.text).toBe("Diskuterar bilreparation");
+      expect(emitted.tiles[0].iconKey).toBe("repair");
+      expect(emitted.tiles[0].svgContent).toBe("<svg><circle cx='12' cy='12' r='10'/></svg>");
+    });
+
+    it("sparar utgående mikrofonaudio (PCM) i defaultDiagnosticRecorder under strömning [SYSTEM-004]", async () => {
+      const recordPcmSpy = vi.spyOn(defaultDiagnosticRecorder, "recordPcmChunk");
+
+      // Skapa en simulerad AudioContext med ScriptProcessor
+      let capturedProcessCallback: ((e: any) => void) | null = null;
+      const mockProcessor = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        set onaudioprocess(cb: (e: any) => void) {
+          capturedProcessCallback = cb;
+        },
+      };
+
+      const mockSource = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      };
+
+      const mockAudioCtx = {
+        createMediaStreamSource: vi.fn().mockReturnValue(mockSource),
+        createScriptProcessor: vi.fn().mockReturnValue(mockProcessor),
+        close: vi.fn(),
+      };
+
+      (service as any).audioContext = mockAudioCtx;
+      (service as any).processor = mockProcessor;
+
+      // Starta mikrofonströmning med fejkad getUserMedia
+      const mockStream = {
+        getTracks: () => [{ stop: vi.fn() }],
+      };
+
+      if (!navigator.mediaDevices) {
+        (navigator as any).mediaDevices = {};
+      }
+      navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue(mockStream);
+      (window as any).AudioContext = vi.fn().mockImplementation(() => mockAudioCtx);
+
+      await service.startMicrophoneStream();
+
+      expect(capturedProcessCallback).not.toBeNull();
+
+      service.setStatus("listening");
+
+      // Simulera ett audio-processing event med Float32Array PCM-data
+      const mockFloatData = new Float32Array(512);
+      mockFloatData[0] = 0.5;
+      mockFloatData[1] = -0.5;
+
+      const mockAudioEvent = {
+        inputBuffer: {
+          getChannelData: () => mockFloatData,
+        },
+      };
+
+      // Kör audiocallbacken
+      capturedProcessCallback!(mockAudioEvent);
+
+      // Verifiera att recordPcmChunk anropats med isModel = false
+      expect(recordPcmSpy).toHaveBeenCalledWith(expect.any(Uint8Array), false);
+
+      recordPcmSpy.mockRestore();
     });
 
     it("rapporterar fel i klartext om mikrofonavläsning misslyckas", async () => {

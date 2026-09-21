@@ -1,43 +1,36 @@
-# Steg 1b: Kartlägga (Cykel 10 - TCK-013: Budskapsrad, Offentlig Röst & Andningspaus)
-
-## 1. Svar på de tre GROW-frågorna
-
-### Svar 1 (State & Flex-skalning)
-- `messageQueue: AacTile[]` läggs till i `AacDisplayState` och hanteras i `useAacDisplay.ts`.
-- `addTileToMessageQueue(tile: AacTile)`: Om `messageQueue.length < 5`, lägg till `tile`. Max 5 symboler garanterar kognitiv överblick enligt `[RULE-006]`.
-- I `UserControlZone.tsx` (eller dedikerad `MessageBar`-sektion i kontrollzonen) renderas brickorna i en horisontell flex-container med `flex-shrink`.
-- Skalningsklasser beroende på antal:
-  - 1–2 symboler: `w-20 h-20 sm:w-24 sm:h-24`
-  - 3–4 symboler: `w-16 h-16 sm:w-20 sm:h-20`
-  - 5 symboler: `w-14 h-14 sm:w-16 sm:h-16`
-- Detta garanterar att hela meningen ryms i den horisontella bottenraden utan rullningslister (`[RULE-003]`).
-
-### Svar 2 (Contract & TTS-separation)
-- **Privat provläsning (`[RULE-005]`, `[RULE-015]`)**:
-  - Vid klick på en symbol inuti `messageQueue` markeras den med `selectedQueueIndex`.
-  - Ordet provläses via Web Speech API (`window.speechSynthesis.speak`) med låg volym (`volume = 0.5`) eller kontrollerad syntetiserare utan att skicka impuls till Gemini Live.
-  - Ett litet rött Typ A kryss (`[x]`) visas över den klickade symbolen. Klick på krysset anropar `removeTileFromMessageQueue(index)`.
-- **Offentlig röst (`[RULE-005]`, `[SYSTEM-001]`)**:
-  - Vid klick på Gröna Bocken (`handleConfirm` eller `speakMessageQueue`):
-    - Hela meningen sammanfogas: `const sentence = messageQueue.map(t => t.speechText).join(" ");`.
-    - Den läses upp högt (`volume = 1.0`).
-    - Hela texten skickas tyst till Gemini Live via `defaultLiveListener.sendTextImpulse(sentence)`.
-    - Detta triggar även adaptiv minnesförstärkning för de ingående symbolerna.
-
-### Svar 3 (Resilience & Timing: Post-Speech Reset)
-- Efter uppläsning sätts `isBreathingPause = true` (`[RULE-008]`).
-- En timer på 3000 ms startas via `setTimeout`.
-- Skärmen och budskapsraden visar en vilsam, dämpad andningspuls (`opacity-70`, `duration-1000`).
-- Efter 3000 ms nollställs `messageQueue: []`, `selectedTile: null`, `selectedQueueIndex: null` och `isBreathingPause = false`.
-- Vid klick på `[Rensa]` avbryts eventuell pågående timer omedelbart och tillståndet rensas direkt.
-- Timern städas i hookens cleanup-funktion vid unmount.
-
-## 2. Vektorvalidering & Fast-Track
+# Steg 1b: Kartlägga (TCK-014)
 
 ```json
 {
   "active_vectors": ["State"],
   "linear_fast_track": true,
-  "rationale": "Ändringen centrerar kring tillståndsmassan för messageQueue, presentationell flex-skalning och lokal TTS-orkestrering under en domän."
+  "ticket": "TCK-014",
+  "domain": "live_listener"
 }
 ```
+
+## Svar på GROW-frågorna
+
+### 1. State (Mikrofonljud & RAM-buffert i DiagnosticRecorder)
+- **Svar:** I `src/features/live_listener/domain/liveListenerService.ts`, inuti `startMicrophoneStream()`, skapas `bytes` från `new Uint8Array(pcm16.buffer)`. Direkt efter rad 431 anropar vi:
+  ```ts
+  defaultDiagnosticRecorder.recordPcmChunk(bytes, false);
+  ```
+  Detta fyller `userPcmChunks` i `diagnosticRecorder.ts`, vilket garanterar att `audio_user.pcm` och sammanfogade `audio_combined.pcm` genereras i zip-filen när användaren laddar ner diagnostik.
+
+### 2. Contract (Ikonmappning, Tier 3 SVG & Topic i Declarations)
+- **Svar:**
+  1. I `src/features/aac_display/domain/types.ts`: Utöka `AacTile` så att `svgContent?: string;` ingår, och tillåt sträng/utökade ikonnycklar.
+  2. I `src/features/aac_display/components/AacTileItem.tsx`:
+     - Importera Lucide-ikoner: `Image as ImageIcon`, `Wrench`, `Sparkles`, `Search`, `Music`, `Phone`, `Car`, `Tv`, `Clock`, `Utensils`, `Bed`, `AlertTriangle`.
+     - Om `tile.svgContent` finns: rendera en inline SVG med säkra dimensioner och `currentColor`.
+     - Om `tile.iconKey` matchar ("images", "repair", "generate", "search" etc.): rendera respektive Lucide-ikon.
+  3. I `src/features/live_listener/domain/liveListenerService.ts`:
+     - Addera parametern `topic` i `UPDATE_TOPIC_ZONES_DECLARATION`.
+     - Uppdatera `COGNITIVE_OBSERVER_INSTRUCTION` så att Gemini instrueras att alltid sätta en kort svensk sammanfattning i `topic`.
+     - I `handleIncomingFunctionCall`: vidarebefordra `svgContent: t.svgContent`.
+
+### 3. Resilience (Robusta fallbacks och prestanda)
+- **Svar:**
+  - Om `recordPcmChunk` skulle kasta ett oväntat fel (t.ex. RAM-allokeringsstrypning), fångas det i en `try-catch` så att Web Audio- och WebSocket-strömmen aldrig avbryts.
+  - Ikonvisningen har kvar `HelpCircle` som sista fallback om varken SVG eller känd ikonnyckel finns.

@@ -15,6 +15,18 @@ import {
   ThumbsDown,
   HeartCrack,
   Toilet,
+  Image as ImageIcon,
+  Wrench,
+  Sparkles,
+  Search,
+  Music,
+  Phone,
+  Car,
+  Tv,
+  Clock,
+  Utensils,
+  Bed,
+  AlertTriangle,
   X,
   Wind,
 } from "lucide-react";
@@ -35,7 +47,23 @@ export function MessageBar({
   onSelectQueueTile,
   onRemoveQueueTile,
 }: MessageBarProps) {
-  const renderIcon = (iconKey: string, queueLen: number) => {
+  const renderIcon = (tile: AacTile, queueLen: number) => {
+    // [ADR-023 Tier 3] Direktkodad SVG
+    if (tile.svgContent && tile.svgContent.trim().length > 0) {
+      const svgSizeClass =
+        queueLen <= 2
+          ? "w-8 h-8 sm:w-10 sm:h-10"
+          : queueLen <= 4
+          ? "w-6 h-6 sm:w-8 sm:h-8"
+          : "w-5 h-5 sm:w-6 sm:h-6";
+      return (
+        <div
+          className={`${svgSizeClass} flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-full [&>svg]:max-w-full`}
+          dangerouslySetInnerHTML={{ __html: tile.svgContent }}
+        />
+      );
+    }
+
     const iconSize =
       queueLen <= 2
         ? "w-8 h-8 sm:w-10 sm:h-10 stroke-[2]"
@@ -43,7 +71,7 @@ export function MessageBar({
         ? "w-6 h-6 sm:w-8 sm:h-8 stroke-[2]"
         : "w-5 h-5 sm:w-6 sm:h-6 stroke-[2]";
 
-    switch (iconKey) {
+    switch (tile.iconKey) {
       case "coffee":
         return <Coffee className={iconSize} />;
       case "cake":
@@ -74,6 +102,49 @@ export function MessageBar({
         return <HeartCrack className={iconSize} />;
       case "toilet":
         return <Toilet className={iconSize} />;
+      case "images":
+      case "image":
+      case "photo":
+        return <ImageIcon className={iconSize} />;
+      case "repair":
+      case "wrench":
+      case "fix":
+      case "tool":
+        return <Wrench className={iconSize} />;
+      case "generate":
+      case "sparkles":
+      case "magic":
+        return <Sparkles className={iconSize} />;
+      case "search":
+      case "find":
+      case "look":
+        return <Search className={iconSize} />;
+      case "music":
+      case "song":
+        return <Music className={iconSize} />;
+      case "phone":
+      case "call":
+        return <Phone className={iconSize} />;
+      case "car":
+      case "drive":
+        return <Car className={iconSize} />;
+      case "tv":
+      case "television":
+        return <Tv className={iconSize} />;
+      case "clock":
+      case "time":
+      case "wait":
+        return <Clock className={iconSize} />;
+      case "food":
+      case "eat":
+      case "utensils":
+        return <Utensils className={iconSize} />;
+      case "sleep":
+      case "bed":
+        return <Bed className={iconSize} />;
+      case "alert":
+      case "warning":
+        return <AlertTriangle className={iconSize} />;
       default:
         return <HelpCircle className={iconSize} />;
     }
@@ -120,7 +191,7 @@ export function MessageBar({
                 : "bg-white border-stone-300 hover:border-stone-400 text-stone-800 shadow-sm"
             }`}
           >
-            {renderIcon(tile.iconKey, messageQueue.length)}
+            {renderIcon(tile, messageQueue.length)}
 
             {/* Typ A Kryss för punktkorrigering [RULE-015] */}
             {isSelected && (

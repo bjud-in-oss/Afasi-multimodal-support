@@ -17,6 +17,18 @@ import {
   ThumbsDown,
   HeartCrack,
   Toilet,
+  Image as ImageIcon,
+  Wrench,
+  Sparkles,
+  Search,
+  Music,
+  Phone,
+  Car,
+  Tv,
+  Clock,
+  Utensils,
+  Bed,
+  AlertTriangle,
 } from "lucide-react";
 import { AacTile } from "../domain/types";
 
@@ -43,6 +55,16 @@ export function AacTileItem({
   const needsClarification = tile.confidence >= 0.5 && tile.confidence < 0.8;
 
   const renderIcon = () => {
+    // [ADR-023 Tier 3] Direktkodad högkontrast-SVG
+    if (tile.svgContent && tile.svgContent.trim().length > 0) {
+      return (
+        <div
+          className="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-full [&>svg]:max-w-full"
+          dangerouslySetInnerHTML={{ __html: tile.svgContent }}
+        />
+      );
+    }
+
     const props = { className: "w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 stroke-[1.75]" };
     switch (tile.iconKey) {
       case "coffee":
@@ -75,6 +97,49 @@ export function AacTileItem({
         return <HeartCrack {...props} />;
       case "toilet":
         return <Toilet {...props} />;
+      case "images":
+      case "image":
+      case "photo":
+        return <ImageIcon {...props} />;
+      case "repair":
+      case "wrench":
+      case "fix":
+      case "tool":
+        return <Wrench {...props} />;
+      case "generate":
+      case "sparkles":
+      case "magic":
+        return <Sparkles {...props} />;
+      case "search":
+      case "find":
+      case "look":
+        return <Search {...props} />;
+      case "music":
+      case "song":
+        return <Music {...props} />;
+      case "phone":
+      case "call":
+        return <Phone {...props} />;
+      case "car":
+      case "drive":
+        return <Car {...props} />;
+      case "tv":
+      case "television":
+        return <Tv {...props} />;
+      case "clock":
+      case "time":
+      case "wait":
+        return <Clock {...props} />;
+      case "food":
+      case "eat":
+      case "utensils":
+        return <Utensils {...props} />;
+      case "sleep":
+      case "bed":
+        return <Bed {...props} />;
+      case "alert":
+      case "warning":
+        return <AlertTriangle {...props} />;
       default:
         return <HelpCircle {...props} />;
     }

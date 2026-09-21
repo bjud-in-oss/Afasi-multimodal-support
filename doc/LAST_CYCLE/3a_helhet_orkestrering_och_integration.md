@@ -1,39 +1,50 @@
-# Steg 3a: Helhet, Orkestrering och Integration (Cykel 10 - TCK-013)
+# Steg 3a: Helhet, Orkestrering och Integration (TCK-014)
 
-## 1. Systemöversikt & Orkestrering
+## Arkitekturell översikt och dataintegration
 
 ```
-[SpeakerZoneView / AacTileItem]
-       │
-       │ onSelectTile(tile)
-       ▼
-[useAacDisplay] ──► messageQueue (max 5)
-       │
-       ├────────────────────────┐
-       ▼                        ▼
-[UserControlZone / MessageBar]  [TTS Engine / SpeechSynthesis]
-  - Elastisk Flex-skalning         - Privat provlyssning vid klick på symbol
-  - Typ A Kryss vid punktval       - Offentlig röst vid Grön Bock
-  - Grön Bock [✓ Bekräfta]         
-       │                        │
-       ▼                        ▼
-[LiveListenerService] ◄─────────┘
-  - sendTextImpulse(sentence)
-       │
-       ▼
-[Post-Speech Reset] (3000 ms vilsam andningspaus)
-  - isBreathingPause = true
-  - Timer 3000 ms -> mjuk tömning av messageQueue
++-----------------------------------------------------------------------------------+
+| LiveListenerService                                                               |
+|                                                                                   |
+|  [getUserMedia 16kHz]                                                             |
+|           |                                                                       |
+|     onaudioprocess ---> recordPcmChunk(bytes, false) ---> DiagnosticRecorder      |
+|           |                                                  (audio_user.pcm)     |
+|           v                                                                       |
+|     sendRealtimeInput (audio/pcm)                                                 |
+|           |                                                                       |
+|           v                                                                       |
+|     Gemini Live WebSocket                                                         |
+|           |                                                                       |
+|           +---> FunctionCall: update_topic_zones({ topic, tiles: [iconKey, ...] })|
+|           |                                                                       |
+|           v                                                                       |
+|     handleIncomingFunctionCall                                                    |
+|           |                                                                       |
+|           +---> vidarebefordrar topic & tiles (inkl. svgContent)                  |
+|                                                                                   |
++----------------------------------------+------------------------------------------+
+                                         |
+                                         v
++-----------------------------------------------------------------------------------+
+| AacDisplay & AacTileItem & MessageBar                                             |
+|                                                                                   |
+|  - AacTileItem renderar:                                                          |
+|      1. tile.svgContent om definierat [ADR-023 Tier 3]                            |
+|      2. Mappad Lucide-ikon: image, wrench, sparkles, search, music, etc.          |
+|      3. HelpCircle som sista fallback om okänd symbol                             |
++-----------------------------------------------------------------------------------+
 ```
 
-## 2. Integrationspunkter
-1. **`types.ts`**:
-   - Utöka `AacDisplayState` med `messageQueue: AacTile[]`, `selectedQueueIndex: number | null`, `isBreathingPause: boolean`.
-2. **`useAacDisplay.ts`**:
-   - `addToMessageQueue(tile: AacTile)`
-   - `removeFromMessageQueue(index: number)`
-   - `speakMessageQueue()`: Kör TTS för hela meningen, anropar `defaultLiveListener.sendTextImpulse(sentence)` och aktiverar 3000 ms andningspaus.
-   - `clearMessageQueue()`: Nollställer kön och avbryter andningspaus.
-3. **`UserControlZone.tsx`**:
-   - Tar emot `messageQueue`, `onSelectQueueTile`, `onRemoveQueueTile`, `isBreathingPause`.
-   - Renderar budskapsraden med elastisk flexbox-skalning.
+## Modulöverskridande integration
+1. `types.ts`: Typdefinitionen för `AacTile` utökas med `svgContent?: string;`.
+2. `liveListenerService.ts`: 
+   - `startMicrophoneStream` anropar `recordPcmChunk(bytes, false)`.
+   - `UPDATE_TOPIC_ZONES_DECLARATION` inkluderar `topic`.
+   - `COGNITIVE_OBSERVER_INSTRUCTION` instruerar beskrivande svensk fras för `topic`.
+   - `handleIncomingFunctionCall` mappar `svgContent: t.svgContent`.
+3. `AacTileItem.tsx`:
+   - Utökad ikonmappning för "images"/"image", "repair"/"wrench", "generate"/"sparkles", "search", "music", "phone", "car", "tv", "clock", "utensils", "bed", "alert".
+   - Stöd för direktkodad `svgContent`.
+4. `MessageBar.tsx`:
+   - Motsvarande utökade ikonmappning så att symbolerna renderas identiskt i budskapsraden.

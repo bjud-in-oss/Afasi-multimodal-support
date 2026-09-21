@@ -1,9 +1,8 @@
-# Steg 2a: Förändra Utåt - Vision (Cykel 10 - TCK-013)
+# Steg 2a: Förändra utåt (Vision) - TCK-014
 
-## 1. Användarcentrerad Vision för Budskapsraden
-Afasideltagaren har ofta svårigheter med verbal produktion och arbetsminnesbelastning. Budskapsraden fungerar som en extern tankebrygga:
-1. **Fritt sammanställande utan press**: Deltagaren trycker på föreslagna koncept eller trygghetsbrickor (t.ex. [Kaffe] + [Bulle]). De flyttas mjukt till budskapsraden i bottenzonen.
-2. **Elastisk överblick (`[RULE-006]`, `[RULE-003]`)**: Oavsett om meningen innehåller 1 eller 5 symboler är alla synliga samtidigt. Ingen rullningslist, inga dolda element under en scroll-tröskel.
-3. **Trygg punktkorrigering (`[RULE-015]`)**: Om deltagaren råkade trycka fel på den andra symbolen behöver inte hela meningen raderas. Ett klick provläser privat och presenterar ett Typ A rött kryss för att radera just den symbolen.
-4. **Offentlig röst och AI-samspel (`[RULE-005]`, `[SYSTEM-001]`)**: När meningen är klar trycker deltagaren på den fasta Gröna Bocken. Enheten talar med klar röst och Gemini Live mottar textimpulsen samtidigt.
-5. **Andningspaus (`[RULE-008]`)**: Inget hoppigt eller hetsigt; ett 3000 ms vilsamt mellanrum låter deltagaren och samtalspartnern ta in budskapet innan fönstret rensas för nästa yttrande.
+## Yttre arkitektur & användarupplevelse
+Ikonerna och samtalskontexten är afasideltagarens direkta förlängning i rummet:
+1. **Intuitiv visuell representation**: När omgivningen pratar om att reparera, leta efter något, visa bilder eller lyssna på musik, ska skärmen visa tydliga, meningsfulla ikoner (skiftnyckel, förstoringsglas, bildikon, noter) istället för förvirrande frågetecken (`HelpCircle`).
+2. **Direktkodad Tier 3 SVG [ADR-023]**: När Gemini Live genererar specialiserade eller kontextunika symboler som inte ingår i standardbiblioteket kan modellen skicka med en direktkodad SVG, vilken omedelbart renderas med perfekt skärpa och hög kontrast.
+3. **Fullständig diagnostik i fält**: Forskare, logopeder och utvecklare som exporterar `diagnostics_60s.zip` får nu med användarens faktiska röst i `audio_user.pcm` och synkroniserad `audio_combined.pcm`, vilket möjliggör fullständig analys av samtalsinteraktioner och latenser.
+4. **Tydlig samtalskontext**: Samtalszonen visar en verklig och levande ämnesbeskrivning (t.ex. "Planerar fika", "Pratar om reparation") istället för en mekanisk fallback "Kalle talar".

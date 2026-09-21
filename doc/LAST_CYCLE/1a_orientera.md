@@ -1,40 +1,30 @@
-# Steg 1a: Orientera (Cykel 10 - TCK-013: Elastisk Budskapsrad, Offentlig Röst & Post-Speech Reset)
+# Steg 1a: Orientera (TCK-014)
 
-## 1. Problembeskrivning & Målbild
-Implementera den kompletta Budskapsraden (Message Bar) och integrera den med Offentlig röst och Post-speech pause enligt `doc/AAC_COGNITIVE_RULES.md`:
+## Ärende & Kontext
+- **Ticket:** TCK-014
+- **Typ:** Fix / Integration
+- **Domän:** `live_listener` / `aac_display`
+- **Beskrivning:** Ikonmapping, mikrofonljud i ZIP och dynamiska ämnesrubriker (ADR-023, SYSTEM-004, RULE-002).
 
-1. **Elastisk Budskapsrad (`[RULE-006]`, `[ADR-019]`, `[RULE-003]`)**:
-   - Bygga och uppdatera tillståndshanteringen i `useAacDisplay.ts` för en sekvens av valda symboler (`messageQueue`: max 5 symboler).
-   - När afasideltagaren klickar på förslagsbrickor eller trygghetsbrickor adderas de till `messageQueue` (om `messageQueue.length < 5`).
-   - Brickorna i budskapsraden skalar mjukt med CSS Flexbox (`w-24` ner till `w-16` vid 5 symboler) så att hela meningen alltid syns i sin helhet utan rullningslister (`[RULE-003]`).
+## Risknoder & GROW-frågor (State, Contract, Resilience)
 
-2. **Punktkorrigering med Typ A Kryss (`[RULE-015]`, `[RULE-005]`)**:
-   - Ett klick på en enskild symbol i budskapsraden provläser ordet privat via tyst lokal TTS (`[RULE-005]`).
-   - Visar ett litet rött punktavfärdande `[x]` (Typ A kryss) ovanför/på den valda symbolen för att radera enbart den symbolen ur meningen utan att hela meningen raderas.
+### 1. Risknod: State (Mikrofonbuffert & RAM-integritet i DiagnosticRecorder)
+- **Goal:** Garantera att utgående mikrofonaudio (16kHz PCM från `startMicrophoneStream`) kontinuerligt lagras i RAM-bufferten via `defaultDiagnosticRecorder.recordPcmChunk(bytes, false)` så att `audio_user.pcm` och `audio_combined.pcm` genereras komplett i ZIP-exporten.
+- **Reality:** I nuvarande `startMicrophoneStream` processas PCM-bytes och sänds till `liveSession`, men `recordPcmChunk` anropas aldrig för mikrofonen (enbart för inkommande modellaudio på rad 549).
+- **Options:** Anropa `defaultDiagnosticRecorder.recordPcmChunk(bytes, false)` direkt efter `pcm16.buffer`-omvandlingen i `onaudioprocess`.
+- **Will:** Injicera anropet synkront i `onaudioprocess` och validera via enhetstest i `liveListenerService.test.ts`.
 
-3. **Offentlig Röst & Gemini Live-impuls (`[RULE-005]`, `[SYSTEM-001]`)**:
-   - Klick på den fasta Gröna Bocken till höger i budskapsraden/kontrollzonen läser upp hela den sammansatta meningen högt via enhetens högtalare (`messageQueue.map(t => t.speechText).join(" ")`).
-   - Skickar samtidigt hela meningen tyst till Gemini Live via `defaultLiveListener.sendTextImpulse(...)` för att ge modellen full kognitiv kontext av vad afasideltagaren uttryckt.
+### 2. Risknod: Contract (Ikonmappning, Tier 3 SVG & Ämnesrubrik i Schema)
+- **Goal:** Tillhandahålla godkända Lucide-ikoner för AI-genererade ikonnycklar (t.ex. "images", "repair", "generate", "search", "music", "phone" m.fl.), stödja direktkodad `svgContent` (Tier 3 [ADR-023]), samt säkerställa att `topic` deklareras och instrueras i Gemini Live tool calling (`update_topic_zones`).
+- **Reality:** `AacTileItem.tsx` saknar fall för dessa vanliga AI-termer och faller tillbaka till `HelpCircle`. `UPDATE_TOPIC_ZONES_DECLARATION` saknar `topic`-parametern i sitt JSON-schema trots att koden läser `args.topic`. `parsedTiles` vidarebefordrar inte `svgContent`.
+- **Options:** 
+  1. Utöka `AacTile["iconKey"]` och `AacTileItem` samt `MessageBar` med rika Lucide-ikoner (`ImageIcon`, `Wrench`, `Sparkles`, `Search` m.fl.).
+  2. Implementera SVG-rendering i `AacTileItem` vid `tile.svgContent`.
+  3. Addera `topic` i schema-deklarationen och skärp systemprompterna i `COGNITIVE_OBSERVER_INSTRUCTION`.
+- **Will:** Implementera fullt kontraktstöd för alla tre punkter utan att bryta bakåtkompatibilitet.
 
-4. **Post-Speech Reset & Andningspaus (`[RULE-008]`)**:
-   - Direkt efter uppläsning inträder en 3000 ms vilsam andningspaus (`isBreathingPause: true`).
-   - Skärmen och budskapsraden tonar mjukt ner, tömmer `messageQueue` och nollställer markerat läge så att deltagaren inte stressas av omedelbart nya krav.
-
-## 2. Inblandade domäner
-- `src/features/aac_display/` (`useAacDisplay.ts`, `UserControlZone.tsx`, `MessageBar.tsx`, `types.ts`, tester)
-- `src/features/live_listener/` (`liveListenerService.ts` - `sendTextImpulse`)
-
-## 3. Tre fokuserade GROW-frågor mot faktiska risknoder
-1. **State & Flex-skalning (Risknod: State)**: Hur struktureras `messageQueue` i `useAacDisplay.ts` med tak på max 5 symboler och hur appliceras CSS Flexbox-skalningen (`w-24` -> `w-16`) i botten-dockan så att layouten förblir 100 % rullningsfri på både mobil och desktop?
-2. **Contract & TTS-separation (Risknod: Contract/Effects)**: Hur separeras privat provlyssning (klick på enskild symbol i budskapsraden med Typ A kryss) från offentlig röst (klick på Grön Bock som läser upp hela meningen och anropar `sendTextImpulse`), och hur mockas/styrs ljudsyntesen säkert i enhetstester?
-3. **Resilience & Timing (Risknod: Resilience)**: Hur styrs den 3000 ms andningspausen (`[RULE-008]`) med timer-rensning så att inga minnesläckor, race conditions eller oönskade tillståndsuppdateringar sker om komponenten avmonteras eller användaren klickar `[Rensa]`?
-
-```json
-{
-  "status": "IN_PROGRESS",
-  "current_domain": "aac_display",
-  "next_step": "1b_kartlagga",
-  "ticket_id": "TCK-013",
-  "active_skill": "gemini-live-api-dev"
-}
-```
+### 3. Risknod: Resilience (Icke-blockerande fallback & Sanering av SVG)
+- **Goal:** Gränssnittet får aldrig krascha vid okända ikonnycklar eller felaktigt formaterad `svgContent`, och WebSocket-strömmen får inte blockeras av inspelningsanrop.
+- **Reality:** `AacTileItem` hanterar redan default-fall (`HelpCircle`), men om `svgContent` är ogiltig eller saknas behövs säker fallback.
+- **Options:** Säkerställ att SVG-rendering fångas och skyddas, samt att default faller tillbaka på ren ikonografi vid behov.
+- **Will:** Säkerställa isolerad och robust felhantering i renderingskedjan.
