@@ -1,23 +1,18 @@
-# Steg 3b: Domän, Kontrakt och Fraktal Dokumentation (TCK-015)
+# Steg 3b: Domän, Kontrakt och Fraktal Dokumentation (TCK-016)
 
-## Domänkontrakt och gränssnitt
+## Domänkontrakt: `live_listener`
 
-### 1. `live_listener` Kontrakt
-- **`LiveListenerService` Metoder**:
-  - `public setLocalSpeaking(speaking: boolean): void`
-    - Sätter status för om lokal talsyntes pågår.
-  - `public isPlaybackActive(): boolean`
-    - Returnerar `true` om antingen `this.isLocalSpeaking` är `true` eller `this.pcmPlayer.isPlaying()` är `true`.
-- **Systeminstruktion (Gemini Live)**:
-  - Uppdaterad `COGNITIVE_OBSERVER_INSTRUCTION` med tydligt undantag:
-    *"EXCEPTION: When receiving a direct user communication via \`text_impulse\`, you MAY respond with a single, very short, warm, and supportive spoken Swedish utterance (max 1 sentence) to acknowledge or reply to the user, after which you immediately return to silent observation."*
+### Systeminstruktionens Bindande Kontrakt (`COGNITIVE_OBSERVER_INSTRUCTION`)
+Instruktionen formaliseras med följande explicita regler:
 
-### 2. `aac_display` Kontrakt
-- **`useAacDisplay` Hook**:
-  - `handleSelectTile(tile: AacTile): void`
-    - Garanterar att två intilliggande identiska symboler inte kan ackumuleras i `messageQueue`.
-  - `speakText(text: string, volume?: number): void`
-    - Sätter talsyntesens livscykelhändelser så att `defaultLiveListener.setLocalSpeaking(true)` triggas vid start och `defaultLiveListener.setLocalSpeaking(false)` vid slut/fel.
-- **Komponenter**:
-  - `UserControlZone.tsx`: Säkrad med flex-shrink-skydd, adaptiv min-höjd och safe-area padding.
-  - `MessageBar.tsx`: Säkrad med horisontell scroll-resiliens vid smala skärmbredder och skyddade ikonstorlekar.
+1. **Strikt Tystnad vid Mikrofonljud (`RULE-002`, `SYSTEM-009`)**:
+   - `ABSOLUTE SPOKEN SILENCE`: Förbud mot att generera tal, röst eller verbala responser när inmatning sker via mikrofonljud.
+   - `ONLY TOOL CALLS`: Under kontinuerlig avlyssning får modellen uteslutande generera verktygsanrop (`update_topic_zones`).
+
+2. **Knapp-Undantag vid Textimpuls (`RULE-005`, `SYSTEM-001`)**:
+   - `STRICT EXCEPTION FOR DIRECT USER TEXT IMPULSE`: Modellen har endast tillstånd att generera ett talat svar när den tar emot en skriven `text_impulse` från användaren via den Gröna Bocken.
+   - `BREVITY CONSTRAINT`: Svaret måste vara högst 1 kort, naturlig och uppmuntrande svensk mening.
+   - `IMMEDIATE RETURN TO SILENCE`: Direkt efter detta svar måste modellen återgå till absolut tystnad.
+
+### Exponering för Testbarhet
+- `COGNITIVE_OBSERVER_INSTRUCTION` exporteras från `src/features/live_listener/domain/liveListenerService.ts` så att testsviten i `liveListenerService.test.ts` kan validera kontrakten deterministiskt mot regressioner.

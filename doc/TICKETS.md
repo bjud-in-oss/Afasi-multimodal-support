@@ -2,4 +2,3 @@
 
 | Ticket ID | Typ | Domän | Status | Beskrivning |
 | :--- | :--- | :--- | :--- | :--- |
-

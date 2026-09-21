@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { LiveListenerService } from "../domain/liveListenerService";
+import { LiveListenerService, COGNITIVE_OBSERVER_INSTRUCTION } from "../domain/liveListenerService";
 import { LiveUtteranceEvent, ListenerStatus } from "../domain/types";
 import { defaultDiagnosticRecorder } from "../domain/diagnosticRecorder";
 
@@ -450,6 +450,26 @@ describe("LiveListenerService (Realtidslyssnare & Samtycke)", () => {
       expect(sendRealtimeInputSpy).toHaveBeenCalled();
 
       recordPcmSpy.mockRestore();
+    });
+  });
+
+  describe("LiveListenerService - Strikt Tystnad och Knapp-Undantag [TCK-016, RULE-002, RULE-005, SYSTEM-001]", () => {
+    it("verifierar att systeminstruktionen föreskriver absolut talförbud vid inkommande mikrofonljud", () => {
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toBeDefined();
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("ABSOLUTE SPOKEN SILENCE DURING AUDIO INPUT");
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toMatch(/never generate spoken audio/i);
+    });
+
+    it("verifierar att systeminstruktionen föreskriver att modellen enbart får använda verktygsanrop (update_topic_zones) vid omgivningsljud", () => {
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("ONLY TOOL CALLS DURING PASSIVE LISTENING");
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("EXCLUSIVELY via non-blocking tool calls (`update_topic_zones`)");
+    });
+
+    it("verifierar att systeminstruktionen har ett strikt knapp-undantag för text_impulse", () => {
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("STRICT EXCEPTION FOR DIRECT USER TEXT IMPULSE");
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("text_impulse");
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toContain("maximum 1 sentence");
+      expect(COGNITIVE_OBSERVER_INSTRUCTION).toMatch(/return to 100% silent observer mode/i);
     });
   });
 });

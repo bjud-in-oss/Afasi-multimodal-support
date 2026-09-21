@@ -1,47 +1,37 @@
-# Steg 3a: Helhet, Orkestrering och Integration (TCK-015)
+# Steg 3a: Helhet, Orkestrering och Integration (TCK-016)
 
-## Systemintegration och datatransporter
+## Systemarkitektur och Samspel
 
-### 1. Interaktionsflöde vid symbolval och dubblettspärr
 ```text
-Användare trycker på bricka [Kaffe]
-  │
-  ▼
-useAacDisplay.ts -> handleSelectTile(tile)
-  ├── 1. Kontrollera om sista brickan i messageQueue == tile
-  │      ├── Ja (Dubblett): Hoppa över tillägg i messageQueue.
-  │      └── Nej: Lägg till tile i messageQueue (max 5).
-  ├── 2. setSelectedTile(tile)
-  └── 3. speakText(tile.speechText) -> Taktil/auditiv bekräftelse.
+[Omgivningsljud i rummet: "Ska vi ta en fika nu?"]
+               │
+               ▼ (16kHz PCM ström)
+   liveListenerService (Mikrofon aktiv)
+               │
+               ▼ WebSocket
+     Gemini Live Session (3.8 Flash)
+   - Strikt Tystnad vid ljud [RULE-002]
+   - INGET TAL / INGEN LJUDUTMATNING
+   - ENBART tool call: update_topic_zones
+               │
+               ▼ toolCall: update_topic_zones({ topic: "Fika", tiles: [Kaffe, Bulle] })
+       AacDisplay (Uppdaterar bildbrickor tyst)
 ```
 
-### 2. Akustisk dämpning och talflöde
+När användaren aktivt trycker på Gröna Bocken:
 ```text
-Gröna Bocken trycks (handleConfirm)
-  │
-  ├── 1. speakText(mening)
-  │      ├── defaultLiveListener.setLocalSpeaking(true)
-  │      └── processor.onaudioprocess stänger av PCM-sändning (Dämpning)
-  ├── 2. defaultLiveListener.sendTextImpulse(mening)
-  │
-TTS tystnar (utterance.onend)
-  │
-  ├── defaultLiveListener.setLocalSpeaking(false)
-  │
-Gemini Live svarar (kort röstsekvens på svenska)
-  │
-  ├── inkommande PCM -> pcmPlayer.enqueuePcmChunk()
-  │      └── pcmPlayer.isPlaying() är SANT -> Mikrofonen förblir dämpad
-  │
-Gemini Live tystnar
-  │
-  └── pcmPlayer.isPlaying() blir FALSKT -> Mikrofonströmning återupptas automatiskt
-```
-
-### 3. Responsiv rendering i bottenzonen
-```text
-UserControlZone.tsx
-  ├── Vänster: Rensa-knapp (RotateCcw) [shrink-0, min-w-[3rem]]
-  ├── Mitten: MessageBar (horisontellt rullbar / elastisk) + Feedbackknappar (Check, X)
-  └── Höger: Mikrofon/Samtyckesknapp (Mic/MicOff) + Diagnostikpunkt [shrink-0]
+[Användare trycker Grön Bock på [Kaffe]]
+               │
+               ├── 1. speakText("Kaffe") (Surfplattans röst)
+               │      └── Mikrofondämpning aktiv [TCK-015]
+               │
+               └── 2. defaultLiveListener.sendTextImpulse("Kaffe")
+                      │
+                      ▼ text_impulse över WebSocket
+            Gemini Live Session (Knapp-Undantag aktiveras)
+            - Genererar max 1 kort svensk mening ("Självklart ordnar vi kaffe!")
+            - Ljud spelas upp via pcmPlayer (Mikrofon förblir dämpad)
+                      │
+                      ▼
+            Återgår direkt till 100% tystnad och enbart update_topic_zones
 ```

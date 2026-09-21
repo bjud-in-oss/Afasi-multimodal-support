@@ -1,70 +1,39 @@
-# Steg 1b: Kartlägga (TCK-015)
+# Steg 1b: Kartlägga (TCK-016)
 
 ```json
 {
   "active_vectors": ["State"],
   "linear_fast_track": true,
-  "ticket": "TCK-015",
-  "domain": "aac_display"
+  "ticket": "TCK-016",
+  "domain": "live_listener"
 }
 ```
 
 ## Svar på GROW-frågorna
 
-### 1. State: Dubblettspärr i `useAacDisplay.ts`
+### 1. State: Tillståndsstyrning och Tystnad vs Textimpuls
 - **Svar:**
-  I `handleSelectTile()` i `src/features/aac_display/hooks/useAacDisplay.ts`:
-  När användaren klickar på en `tile: AacTile`, undersöker vi det sista elementet i `prev.messageQueue`:
-  ```ts
-  const lastTile = prev.messageQueue[prev.messageQueue.length - 1];
-  const isAdjacentDuplicate =
-    lastTile &&
-    (lastTile.id === tile.id ||
-      (lastTile.iconKey === tile.iconKey &&
-        lastTile.speechText.trim().toLowerCase() === tile.speechText.trim().toLowerCase()));
+  I `src/features/live_listener/domain/liveListenerService.ts`:
+  Vi uppdaterar `COGNITIVE_OBSERVER_INSTRUCTION` under `## CORE BEHAVIORAL RULES & CONSTRAINTS` med följande två kristallklara och bindande principer:
+  1. **STRICT SILENT OBSERVER MODE (100% Spoken Silence on Audio Input) [RULE-002, SYSTEM-009]:**
+     - Modellen har ett absolut, kompromisslöst förbud mot att generera tal, röst eller verbala responser när den tar emot mikrofonavlyssning / omgivningsljud.
+     - Modellen instrueras att ENBART generera icke-blockerande verktygsanrop (`update_topic_zones`) så länge den lyssnar på omgivningsljud.
+     - Detta förhindrar all form av oavsiktlig inblandning, ekon eller spontana inpass från AI-assistenten.
+  2. **BUTTON-TRIGGERED EXCEPTION FOR DIRECT USER COMMUNICATION [RULE-005, SYSTEM-001]:**
+     - Modellen FÅR ENBART och UTESLUTANDE generera ett talat svar när den tar emot en skriven `text_impulse` från användaren (vilket sker när användaren bekräftar ett budskap via den Gröna Bocken i gränssnittet).
+     - Talresponsen måste vara maximalt en (1) kort, varm, naturlig och uppmuntrande svensk mening (t.ex. "Självklart ordnar vi det!", "Det låter jättegott!").
+     - Omedelbart efter att denna enda mening yttrats måste modellen återgå till 100 % strikt tystnad och uteslutande verktygsanrop.
 
-  const nextQueue =
-    isAdjacentDuplicate || prev.messageQueue.length >= 5
-      ? prev.messageQueue
-      : [...prev.messageQueue, tile];
-  ```
-  Detta säkerställer:
-  - Ingen dubbel symbol intill varandra i kön.
-  - Max 5 symboler bibehålls strikt enligt [RULE-006 & ADR-019].
-  - Användaren kan fortfarande välja olika symboler alternerande om så önskas (t.ex. Kaffe -> Bulle -> Kaffe).
-  - Talsyntesen (`speakText(tile.speechText)`) och `setSelectedTile(tile)` körs fortfarande så att användaren känner att klicket registreras.
-
-### 2. Contract: Responsiv Bottenlayout i `UserControlZone.tsx` och `MessageBar.tsx`
+### 2. Contract: Exponering och Validering av Systeminstruktionen
 - **Svar:**
-  - I `UserControlZone.tsx`:
-    - Ta bort den hårda strypningen `max-h-24 sm:max-h-28` och ersätt med ett elastiskt intervall `min-h-[4.5rem] sm:min-h-[5rem] lg:min-h-0` med `h-auto`.
-    - Ge knappar (`btn-clear-selection`, `feedback-confirm`, `feedback-reject`, `btn-toggle-mic`) tydliga flex-skydd (`shrink-0 sm:shrink` och `min-w-[3rem] sm:min-w-[3.5rem]`) så att de aldrig trycks ihop under 44-48px.
-    - Lägg till mobil safe-area padding: `pb-[max(0.75rem,env(safe-area-inset-bottom))]` för moderna smartphones.
-  - I `MessageBar.tsx`:
-    - Ge containern `shrink min-w-0 max-w-full overflow-x-auto scrollbar-none py-1` så att symbolerna glider mjukt i horisontell led om skärmen är extremt smal (t.ex. äldre mobiler < 360px bredd), utan att bryta ut eller krocka med feedbackknapparna.
+  - Vi gör `export const COGNITIVE_OBSERVER_INSTRUCTION` i `liveListenerService.ts` så att systeminstruktionen kan importeras och granskas direkt i testmiljön.
+  - I `src/features/live_listener/__tests__/liveListenerService.test.ts` skapar vi dedikerade tester som:
+    1. Verifierar att `COGNITIVE_OBSERVER_INSTRUCTION` innehåller det absoluta förbudet mot spontant tal vid mikrofoninmatning.
+    2. Verifierar att den kräver att modellen ENBART genererar verktygsanrop (`update_topic_zones`) vid omgivningsljud.
+    3. Verifierar att det explicita undantaget för `text_impulse` (Gröna Bocken) finns formulerat med max 1 kort svensk mening och krav på omedelbar återgång till tyst observation.
 
-### 3. Effects: Lokal Mikrofondämpning och Turordning i `LiveListenerService`
+### 3. Effects: Akustisk och Kognitiv Resiliens
 - **Svar:**
-  - I `src/features/live_listener/domain/liveListenerService.ts`:
-    - Lägg till intern flagga `private isLocalSpeaking: boolean = false;` och metoderna:
-      ```ts
-      public setLocalSpeaking(speaking: boolean): void {
-        this.isLocalSpeaking = speaking;
-      }
-      public isPlaybackActive(): boolean {
-        return this.isLocalSpeaking || this.pcmPlayer.isPlaying();
-      }
-      ```
-    - I `processor.onaudioprocess`:
-      ```ts
-      if (this.status !== "listening") return;
-      if (this.isPlaybackActive()) {
-        // Pausa mikrofonsändning vid aktiv uppspelning för att förhindra akustisk rundgång och avbrott [TCK-015, RULE-002]
-        return;
-      }
-      ```
-    - I `useAacDisplay.ts`:
-      Uppdatera `speakText(text, volume)` så att den sätter `defaultLiveListener.setLocalSpeaking(true)` vid start och återställer till `false` vid `utterance.onend` eller `utterance.onerror` (med en säker timeout-fallback på beräknad talspråkslängd).
-    - I `COGNITIVE_OBSERVER_INSTRUCTION` i `liveListenerService.ts`:
-      Justera regeln för "SILENT OBSERVER MODE" så att ett tydligt undantag definieras för användarinitierade `text_impulse`:
-      *"EXCEPTION: When receiving a direct user communication via \`text_impulse\`, you MAY respond with a single, very short, warm, and supportive spoken Swedish utterance (max 1 sentence) to acknowledge or reply to the user, after which you immediately return to silent observation."*
+  - När användaren trycker på Gröna Bocken i `UserControlZone` exekveras `handleConfirm` i `useAacDisplay.ts`. Detta sänder `defaultLiveListener.sendTextImpulse(messageText)`.
+  - Tack vare mikrofondämpningen från TCK-015 (`setLocalSpeaking(true)` och `pcmPlayer.isPlaying()`) är mikrofonen dämpad både när lokal talsyntes läser upp budskapet och när Gemini Live spelar upp sitt korta svar.
+  - Genom att systeminstruktionen nu är 100 % tyst vid mikrofonljud finns ingen risk att Gemini Live någonsin bryter in spontant under pågående bordssamtal eller avbryter deltagaren.

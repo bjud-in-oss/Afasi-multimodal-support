@@ -1,36 +1,33 @@
-# Steg 1a: Orientera (TCK-015)
+# Steg 1a: Orientera (TCK-016)
 
 ## Ärende & Kontext
-- **Ticket:** TCK-015
-- **Typ:** Feature / UX / Resiliens
-- **Domän:** `aac_display` / `live_listener`
-- **Beskrivning:** Dubblettspärr i MessageBar, responsiv bottenlayout för mobila skärmar & lokal mikrofondämpning vid playback (RULE-002, RULE-005, RULE-006, SYSTEM-001).
+- **Ticket:** TCK-016
+- **Typ:** Feature / Prompt / Resiliens
+- **Domän:** `live_listener`
+- **Beskrivning:** Strikt tyst observatör med knapp-undantag för Gemini Live (RULE-002, RULE-005, SYSTEM-001).
 
 ## Risknoder & GROW-frågor (State, Contract, Effects)
 
-### 1. Risknod: State (Dubblettspärr i MessageBar & Kö-integritet)
-- **Goal:** Förhindra ackumulering av identiska symboler direkt efter varandra i `messageQueue` (t.ex. "Prata vidare Nikon Prata vidare Nikon Nikon") när användaren av misstag trycker upprepade gånger eller vid motoriska tremor, samtidigt som användaren fortfarande får auditiv bekräftelse för sitt tryck.
-- **Reality:** I `useAacDisplay.ts` lägger `handleSelectTile()` alltid till klickad bricka i `messageQueue` så länge `messageQueue.length < 5`, oavsett vad föregående element i kön är.
-- **Options:** 
-  1. Kontrollera om sista elementet i `messageQueue` matchar den nyss klickade brickan (`last.id === tile.id || (last.iconKey === tile.iconKey && last.speechText === tile.speechText)`).
-  2. Om dubblett: avstå från att lägga till i `messageQueue`, men sätt `selectedTile` och kör `speakText` för att ge taktil/auditiv feedback utan att förorena meningsbyggnaden.
-- **Will:** Implementera strikt dubblettspärr i `handleSelectTile()` som spärrar intilliggande dubbletter men bibehåller val och talsyntesåterkoppling.
+### 1. Risknod: State (Modalitetstillstånd & Avgränsning mellan Mikrofonström och Textimpuls)
+- **Goal:** Garantera att Gemini Live-sessionen upprätthåller 100 % tystnad som absolut standardläge vid kontinuerlig mikrofonström (16kHz PCM), och att talsvar aktiveras uteslutande som en reaktion på en explicit användardriven `text_impulse` från Grön Bock.
+- **Reality:** I `COGNITIVE_OBSERVER_INSTRUCTION` (under `src/features/live_listener/domain/liveListenerService.ts`) finns redan en grundläggande skrivning om tyst observation, men för att förhindra spontana hallucinationer eller verbala bekräftelser vid otydligt bakgrundsprat behövs ett vattentätt, kategoriskt förbud mot spontant tal vid mikrofoninmatning.
+- **Options:**
+  1. Skärpa formuleringen i `COGNITIVE_OBSERVER_INSTRUCTION` så att inkommande mikrofonljud explicit begränsas till att ENDAST få resultera i verktygsanropet `update_topic_zones` – aldrig tal eller ljud.
+  2. Tydliggöra att modalitetsväxling till talat svenskt svar är strikt villkorat till mottagandet av en `text_impulse`-händelse från användarens aktiva val i gränssnittet.
+- **Will:** Implementera en kategorisk och otvetydig tystnadsregel i prompten och knyta talrespons direkt till `text_impulse`.
 
-### 2. Risknod: Contract (Responsiv Bottenlayout & Touch Target-integritet)
-- **Goal:** Garantera att `UserControlZone` och `MessageBar` på små och medelstora mobila skärmar bibehåller full peksäkerhet (minst 44-48px touch targets), aldrig trycks ihop vertikalt eller klipper ikoner, och respekterar safe-areas i mobila webbläsare.
-- **Reality:** `UserControlZone.tsx` har en hård begränsning `max-h-24 sm:max-h-28` som vid 5 brickor i `MessageBar` tvingar ihop bekräftelse- och mikrofonknappar horisontellt och vertikalt.
-- **Options:** 
-  1. Justera höjd- och krympningsrestriktioner (`min-h-[4.5rem]`, borttagande av för snäva `max-h`, tillägg av `shrink-0` på knappar och responsiv `overflow-x-auto` vid trånga utrymmen).
-  2. Skydda knapparna `btn-clear-selection`, `feedback-confirm`, `feedback-reject` och `btn-toggle-mic` från att kollapsa under minimumbredd.
-  3. Säkerställa safe-area-padding i botten.
-- **Will:** Uppdatera Tailwind-layouten i `UserControlZone.tsx` och `MessageBar.tsx` för optimal flexibilitet och ergonomi.
+### 2. Risknod: Contract (Systeminstruktionens Kontrakt & Undantagsdefinition)
+- **Goal:** Säkerställa att systeminstruktionen har en kristallklar semantisk struktur: (a) Absolut förbud mot spontant tal vid omgivningsljud, (b) Krav på att ENBART generera verktygsanrop `update_topic_zones` vid mikrofoninmatning, (c) Ett strikt och snävt definierat undantag: vid mottagen `text_impulse` FÅR modellen generera max 1 kort, naturlig och uppmuntrande svensk mening innan den omedelbart återgår till tystnad.
+- **Reality:** Instruktionen är privat i `liveListenerService.ts` och saknar direkt export för enhetstestning, vilket gör att regressioner i instruktionens formulering inte fångas i CI/testsviten.
+- **Options:**
+  1. Exportera `COGNITIVE_OBSERVER_INSTRUCTION` eller skapa en accessor-metod `getSystemInstruction()`.
+  2. Strukturera om sektionen `1. SILENT OBSERVER MODE` med numrerade och fetmarkerade klausuler för "ABSOLUTE SILENCE ENFORCEMENT" och "STRICT BUTTON-TRIGGERED EXCEPTION".
+- **Will:** Exportera `COGNITIVE_OBSERVER_INSTRUCTION` och bygga stringenta påståenden i `liveListenerService.test.ts`.
 
-### 3. Risknod: Effects (Lokal Mikrofondämpning vid Playback & Röstsekvens)
-- **Goal:** Förhindra akustisk rundgång, eko, dubbelläsning och oavsiktliga "interrupted"-avbrott i Gemini Live genom att automatiskt dämpa/pausa mikrofonens PCM-ström (16kHz) medan ljud spelas upp — vare sig det gäller lokal talsyntes (TTS) vid Grön Bock eller inkommande PCM-röst från Gemini Live. Samtidigt ska Gemini instrueras att ge en kort, naturlig muntlig respons i rummet vid mottagen `text_impulse`.
-- **Reality:** Mikrofonens `onaudioprocess` skickar kontinuerligt data till Gemini Live oavsett om högtalarna spelar upp TTS eller Gemini-röst. Systeminstruktionen föreskriver också strikt "SILENT OBSERVER MODE" utan undantag för användarinitierade `text_impulse`.
-- **Options:** 
-  1. Implementera `isPlaybackActive()` i `LiveListenerService` som kontrollerar både `pcmPlayer.isPlaying()` och lokal syntesstatus (`isLocalSpeaking`).
-  2. I `onaudioprocess`: avbryt mikrofonsändning om `this.isPlaybackActive()` är sant.
-  3. Koppla `speakText()` i `useAacDisplay.ts` via talsyntesens livscykelhändelser (`onstart`, `onend`, `onerror`) till `defaultLiveListener.setLocalSpeaking(true/false)`.
-  4. Uppdatera `COGNITIVE_OBSERVER_INSTRUCTION` så att Gemini Live vid en mottagen `text_impulse` tillåts ge en kort, varm svensk röstsekvens innan återgång till tyst observation.
-- **Will:** Implementera heltäckande tillståndsdämpning och promptjustering.
+### 3. Risknod: Effects (Akustisk Miljö & Kognitiv Trygghet för Afasideltagaren)
+- **Goal:** Skydda afasideltagaren från att bli avbruten eller stressad av att en AI-röst spontant "lägger sig i" samtalet i rummet, samtidigt som deltagaren känner sig bekräftad och hörd när denne aktivt sänt ett meddelande med Gröna Bocken.
+- **Reality:** Om en AI talar oombett uppstår förvirring kring vem som talar i rummet (deltagaren, samtalspartnern eller datorn). När deltagaren däremot trycker på Gröna Bocken har deltagaren tagit kommandot – då är en kort bekräftelse från AI:n ("Det ordnar vi!", "Gott med kaffe!") stödjande och naturlig.
+- **Options:**
+  1. Tillåt obegränsat svar vid knapptryck.
+  2. Begränsa svaret strikt till max 1 kort svensk mening, med omedelbar återgång till tyst observation, i kombination med den befintliga mikrofondämpningen [TCK-015].
+- **Will:** Låsa svaret till max 1 kort mening och verifiera att samverkan med mikrofondämpningen bibehåller total akustisk stabilitet.

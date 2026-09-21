@@ -1,15 +1,15 @@
-# Steg 2b: Evaluera Yttre Anpassning (TCK-015)
+# Steg 2b: Evaluera Yttre Anpassning (TCK-016)
 
-## Utvärdering av ändringen mot omgivande system och användarbehov
+## Utvärdering mot Yttre Anpassning och Systemkrav
 
-### 1. Påverkan på kognitiv belastning [RULE-001, RULE-006]
-- Dubblettspärren eliminerar visuell röra och frustration orsakad av oavsiktliga multitryck.
-- Den visuella responsen (att brickan markeras och läses upp) bibehålls så att användaren inte upplever att skärmen "inte tog klicket".
+### 1. Kognitiv Belastning och Afasiprinciper [RULE-001, RULE-002]
+- **Krav:** Afasideltagaren får aldrig utsättas för oväntade auditiva stimuli eller kognitiv stress.
+- **Utvärdering:** Genom att förbjuda allt spontant tal vid mikrofoninmatning minimeras sensorisk överbelastning. Skärmen förblir en ren visuell och taktil stödresurs.
 
-### 2. Ergonomi och responsivitet [RULE-006, RULE-015]
-- Anpassningen i `UserControlZone` tar hänsyn till pekskärmars safe areas och säkerställer att alla knappar uppfyller WCAG AA och har en pekyta på minst 48px höjd.
-- `MessageBar` anpassar storleken på brickorna dynamiskt baserat på antal valda element (1-2 stora, 3-4 medel, 5 kompakta) och tillåter smidig horisontell scroll om skärmen är extremt smal.
+### 2. Samtalsordning och Symmetri [RULE-005, RULE-009]
+- **Krav:** Samtalsstödjaren och deltagaren måste kunna föra ett normalt samtal utan att tekniken stjäl fokus.
+- **Utvärdering:** AI:ns roll degraderas till att enbart bistå med ord och bilder. Talrespons reserveras exklusivt för stunder då deltagaren aktivt tillkallat uppmärksamhet via Gröna Bocken.
 
-### 3. Akustisk miljö & Gemini Live turordning [SYSTEM-001, RULE-002, RULE-005]
-- Mikrofondämpningen löser ett av de mest kritiska problemen i tvåvägs-ljudsystem: eko där AI-rösten eller den lokala syntesen "hör sig själv" via mikrofonen och utlöser ett avbrott (`interrupted`).
-- Genom att dämpa mikrofonen under aktiv uppspelning skyddas både Geminis tolkning och användarens lugn.
+### 3. Tekniska Begränsningar hos Multimodal LLM (Gemini Live)
+- **Krav:** LLM:er som lyssnar på kontinuerligt ljud tenderar utan strikta systeminstruktioner att ibland tolka hummande, pauser eller frågor i rummet som direkta frågor till modellen.
+- **Utvärdering:** Genom att instruera modellen att den *ENBART* får svara via funktionsanropet `update_topic_zones` så länge inmatningen sker via mikrofonljud, och att tal endast får förekomma vid explicit `text_impulse`, binds modellens beteende hårt mot rätt modalitetskanal.
